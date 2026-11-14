@@ -6,7 +6,7 @@ import argparse, csv, math, queue, threading, time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
-from PyQt5.QtCore import Qt, QSize, QTimer, pyqtSignal, QEvent
+from PyQt5.QtCore import Qt, QSize, QTimer, pyqtSignal, QEvent, QSettings
 from PyQt5.QtGui import QFont, QPainter, QPen, QColor
 from PyQt5.QtWidgets import QApplication, QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFrame, QGridLayout, QHBoxLayout, QLabel, QLineEdit, QMessageBox, QPlainTextEdit, QPushButton, QScrollArea, QSlider, QStyle, QTabWidget, QTableWidget, QTableWidgetItem, QToolTip, QVBoxLayout, QWidget
 from wt8_antenna import Axis, Direction, Position, SafeAntenna, shortest_angle_delta
@@ -655,6 +655,9 @@ class WT8App(QWidget):
         super().__init__(); self.config_path=Path(config_path); self.configs=load_configs(self.config_path); self.site=load_site_config(self.config_path); self.power_config=load_power_config(self.config_path); self.sources=load_sources(self.config_path); self.selected_source_name=self.site.selected_source if self.site.selected_source in self.sources else next(iter(self.sources), '')
         self.event_log=EventLogger(Path('logs'),self.site.log_retention_days,self.site.log_level); self.state_store=AppStateStore(); self.sessions={}; self.positions={}; self.position_rate_state={}; self.cards={}; self.current_target=None; self.card_targets={}; self.tracking_kind=''; self.tracking_stop=threading.Event(); self.tracking_thread=None; self.service_stop=threading.Event(); self.service_active=False; self.park_stop=threading.Event(); self.park_active=False; self.fixed_target_mode=''; self.fixed_target_generation=0; self.tracking_starting=False; self.jog_stops={}; self.manual_axes={}; self.manual_pending={}; self.manual_modes={}; self.b210_stop=threading.Event(); self.b210_thread=None; self.events=queue.Queue(); self.event_history=[]; self.log_handle=None; self.log_writer=None; self.scan_stop=threading.Event(); self.scan_thread=None; self.scan_antenna_name=''; self.scan_axis=None; self.scan_offset_degrees=0.0; self.scan_offset_lock=threading.Lock(); self.scan_result_dialogs=[]; self.yfactor_stop=threading.Event(); self.yfactor_thread=None; self.yfactor_active=False; self.yfactor_hot_label=''; self.peak_stop=threading.Event(); self.peak_thread=None; self.tracking_nominal_az={}; self.tracking_az_comp_force={}; self.modeless_dialogs=[]; self.active_scan_antenna=''; self.active_scan_dialog=None; self.scan_resume_kind=''; self.last_user_activity=time.monotonic(); self.timeout_in_progress=False
         self.voice=VoiceAnnunciator()
+        self.voice_settings=QSettings('WT8', 'AntennaController')
+        self.saved_voice_muted=self.voice_settings.value('voice/muted', True, type=bool)
+        self.saved_voice_volume=max(0,min(100,self.voice_settings.value('voice/volume',70,type=int)))
         self._voice_state_versions={}
         self._voice_suppress_connect_stop=set()
         self.setWindowTitle(f'WT8 — Antenna Control & Tracking {APP_VERSION}'); self.resize(1380,920); self.setMinimumSize(1250,880); self.build_ui(); self.style_ui(); self.set_status('Load config, connect antennas, then use guarded jogs.'); self.event_log.info('APP_START',version=APP_VERSION,config=str(config_path))
@@ -672,12 +675,14 @@ class WT8App(QWidget):
         main.addWidget(self.overview)
         voice_row=QHBoxLayout(); voice_row.setSpacing(8)
         voice_row.addWidget(bold('VOICE ANNUNCIATION'))
-        self.voice_mute=QCheckBox('Mute'); self.voice_mute.setChecked(True)
-        self.voice_mute.toggled.connect(lambda checked:self.voice.set_muted(checked))
+        self.voice_mute=QCheckBox('Mute'); self.voice_mute.setChecked(self.saved_voice_muted)
+        self.voice.set_muted(self.saved_voice_muted)
+        self.voice_mute.toggled.connect(self.set_voice_muted)
         voice_row.addWidget(self.voice_mute)
         voice_row.addWidget(lbl('Volume'))
-        self.voice_volume=QSlider(Qt.Horizontal); self.voice_volume.setRange(0,100); self.voice_volume.setValue(70); self.voice_volume.setFixedWidth(145)
-        self.voice_volume.valueChanged.connect(self.voice.set_volume); voice_row.addWidget(self.voice_volume)
+        self.voice_volume=QSlider(Qt.Horizontal); self.voice_volume.setRange(0,100); self.voice_volume.setValue(self.saved_voice_volume); self.voice_volume.setFixedWidth(145)
+        self.voice.set_volume(self.saved_voice_volume)
+        self.voice_volume.valueChanged.connect(self.set_voice_volume); voice_row.addWidget(self.voice_volume)
         self.voice_test=btn('Test Voice'); self.voice_test.clicked.connect(lambda:self.voice.announce('East','test')); voice_row.addWidget(self.voice_test)
         if not self.voice.ready:
             self.voice_test.setEnabled(False)
@@ -837,6 +842,14 @@ class WT8App(QWidget):
             self.event_view.verticalScrollBar().setValue(0)
         self.state_store.set_status(msg,SystemRunState.IDLE)
         self.refresh_system_status()
+    def set_voice_muted(self,muted):
+        self.voice.set_muted(muted)
+        self.voice_settings.setValue('voice/muted',bool(muted))
+        self.voice_settings.sync()
+    def set_voice_volume(self,volume):
+        self.voice.set_volume(volume)
+        self.voice_settings.setValue('voice/volume',int(volume))
+        self.voice_settings.sync()
     def announce_antenna_state(self,name,state):
         # The card is the authority: never speak a status that has already
         # changed on screen. Rapid CONNECTING/STOPPED/TRACKING transitions
@@ -1830,6 +1843,7 @@ class WT8App(QWidget):
         if self.log_handle: self.log_handle.close(); self.set_status('B210 log stopped.')
         self.log_handle=None; self.log_writer=None
     def closeEvent(self,event):
+        self.voice_settings.sync()
         self.voice.close()
         self.event_log.info('APP_STOP',version=APP_VERSION); self.stop_b210(); self.stop_all()
         for s in list(self.sessions.values()):
