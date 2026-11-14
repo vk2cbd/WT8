@@ -20,6 +20,7 @@ from wt8_state import AppStateStore, SystemRunState
 from wt8_service import validate_service_target
 from wt8_precision import precision_fixed_slew, PositionCancelled
 from wt8_voice import VoiceAnnunciator
+from wt8_stellarium_feedback import StellariumFeedback
 APP_VERSION = "v0.4-dev"
 
 def serial_port_display(port: str) -> str:
@@ -814,6 +815,7 @@ class WT8App(QWidget):
     def __init__(self,config_path):
         super().__init__(); self.config_path=Path(config_path); self.configs=load_configs(self.config_path); self.site=load_site_config(self.config_path); self.power_config=load_power_config(self.config_path); self.sources=load_sources(self.config_path); self.selected_source_name=self.site.selected_source if self.site.selected_source in self.sources else next(iter(self.sources), '')
         self.event_log=EventLogger(Path('logs'),self.site.log_retention_days,self.site.log_level); self.state_store=AppStateStore(); self.sessions={}; self.positions={}; self.position_rate_state={}; self.cards={}; self.current_target=None; self.card_targets={}; self.tracking_kind=''; self.tracking_stop=threading.Event(); self.tracking_thread=None; self.service_stop=threading.Event(); self.service_active=False; self.park_stop=threading.Event(); self.park_active=False; self.fixed_target_mode=''; self.fixed_target_generation=0; self.tracking_starting=False; self.jog_stops={}; self.manual_axes={}; self.manual_pending={}; self.manual_modes={}; self.b210_stop=threading.Event(); self.b210_thread=None; self.events=queue.Queue(); self.event_history=[]; self.log_handle=None; self.log_writer=None; self.scan_stop=threading.Event(); self.scan_thread=None; self.scan_antenna_name=''; self.scan_axis=None; self.scan_offset_degrees=0.0; self.scan_offset_lock=threading.Lock(); self.scan_result_dialogs=[]; self.yfactor_stop=threading.Event(); self.yfactor_thread=None; self.yfactor_active=False; self.yfactor_hot_label=''; self.peak_stop=threading.Event(); self.peak_thread=None; self.tracking_nominal_az={}; self.tracking_az_comp_force={}; self.modeless_dialogs=[]; self.active_scan_antenna=''; self.active_scan_dialog=None; self.scan_resume_kind=''; self.last_user_activity=time.monotonic(); self.timeout_in_progress=False
+        self.stellarium_feedback=None
         self.voice=VoiceAnnunciator()
         self.voice_settings=QSettings('WT8', 'AntennaController')
         self.saved_voice_muted=self.voice_settings.value('voice/muted', True, type=bool)
@@ -863,6 +865,7 @@ class WT8App(QWidget):
             ('Tracking','toolAction',self.open_tracking_dialog,'SP_ComputerIcon'),
             ('Sources','toolAction',self.open_sources_dialog,'SP_DirIcon'),
             ('Stellarium','toolAction',self.open_stellarium_dialog,'SP_ComputerIcon'),
+            ('Stellarium Live','toolAction',self.toggle_stellarium_feedback,'SP_ComputerIcon'),
         ]
         tools_actions=[
             ('Calibration','toolAction',self.open_calibration_dialog,'SP_DialogApplyButton'),
@@ -959,6 +962,23 @@ class WT8App(QWidget):
             widget.setWordWrap(True); sg.addWidget(widget)
         sg.addStretch(1); bottom.addWidget(status_panel,2)
         main.addWidget(self.event_panel); self.event_panel.hide()
+    def toggle_stellarium_feedback(self):
+        if self.stellarium_feedback is not None:
+            self.stellarium_feedback.close()
+            self.stellarium_feedback=None
+            self.action_buttons['Stellarium Live'].setText('Stellarium Live')
+            self.set_status('Stellarium antenna-position feedback stopped.')
+            return
+        try:
+            import astropy.coordinates  # Required for accurate ICRS/J2000 conversion.
+            feedback=StellariumFeedback(self.site.latitude,self.site.longitude)
+            feedback.start()
+            self.stellarium_feedback=feedback
+            self.action_buttons['Stellarium Live'].setText('Stop Stellarium Live')
+            self.set_status('Stellarium read-only feedback enabled: East TCP 10001, West TCP 10002.')
+        except Exception as exc:
+            self.set_status(f'Stellarium feedback unavailable: {exc}. Install python3-astropy if missing.')
+
     def open_stellarium_dialog(self):
         dialog=StellariumDialog(self)
         dialog.exec_()
@@ -1709,7 +1729,12 @@ class WT8App(QWidget):
                 except Exception as e: self.emit(lambda data:self.mark_fault(*data),(n,str(e)))
         self.run_thread(worker,'Poll')
     def update_position(self,name,pos):
-        self.update_position_rates(name,pos); self.positions[name]=pos; c=self.cards[name]; c.set_position(pos); card_target,az_comp=self.antenna_display_target(name,self.current_target); c.set_target(card_target,pos,az_comp); cfg=self.configs[name]; c.set_limits_ok(cfg.limits.is_az_allowed(pos.azimuth) and cfg.limits.is_el_allowed(pos.elevation))
+        self.update_position_rates(name,pos); self.positions[name]=pos
+        if self.stellarium_feedback is not None:
+            antenna='East' if name.lower()=='east' else ('West' if name.lower()=='west' else None)
+            if antenna is not None:
+                self.stellarium_feedback.update(antenna,pos.azimuth,pos.elevation)
+        c=self.cards[name]; c.set_position(pos); card_target,az_comp=self.antenna_display_target(name,self.current_target); c.set_target(card_target,pos,az_comp); cfg=self.configs[name]; c.set_limits_ok(cfg.limits.is_az_allowed(pos.azimuth) and cfg.limits.is_el_allowed(pos.elevation))
     def antenna_rate_active(self,name):
         card=self.cards.get(name)
         if not card: return False
@@ -2054,6 +2079,9 @@ class WT8App(QWidget):
         if self.log_handle: self.log_handle.close(); self.set_status('B210 log stopped.')
         self.log_handle=None; self.log_writer=None
     def closeEvent(self,event):
+        if self.stellarium_feedback is not None:
+            self.stellarium_feedback.close()
+            self.stellarium_feedback=None
         self.voice_settings.sync()
         self.voice.close()
         self.event_log.info('APP_STOP',version=APP_VERSION); self.stop_b210(); self.stop_all()
