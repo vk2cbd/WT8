@@ -690,41 +690,52 @@ class WT8App(QWidget):
         self.power.setVisible(visible)
         self.power_toggle.setText('▾ B210 SDR POWER / CALIBRATION — Hide panel' if visible else '▸ B210 SDR POWER / CALIBRATION — Show panel')
     def style_ui(self):
+        # Palette and hierarchy intentionally mirror the approved dashboard mockup.
         self.setStyleSheet("""
-            QWidget{background:#eef3f9;color:#1b2c40;font-family:Arial,Helvetica,sans-serif;font-size:10pt}
-            QLabel{background:transparent;border:none;color:#1f252b}
-            QLabel#muted{color:#8a8f95}
-            QLabel#appTitle{background:#205487;color:white;font-size:14pt;font-weight:bold;padding:8px 12px;border-radius:5px}
-            QLabel#overview{background:#e2ecf8;color:#254c77;border:1px solid #c2d7ed;padding:5px 10px;font-weight:bold;border-radius:4px}
-            QPushButton#sectionToggle{text-align:left;background:#e4edf8;color:#205487;font-weight:bold;border-radius:4px;min-height:18px;padding:3px 10px}
+            QWidget{background:#edf2f8;color:#20354c;font-family:Arial,Helvetica,sans-serif;font-size:10pt}
+            QLabel{background:transparent;border:none;color:#24384e}
+            QLabel#muted{color:#6d8197}
+            QLabel#bold{font-weight:700;color:#23486e}
+            QLabel#appTitle{background:#183e70;color:white;font-size:15pt;font-weight:bold;padding:9px 14px;border-radius:5px}
+            QLabel#overview{background:#e2ecf7;color:#234e7e;border:1px solid #b7cee5;padding:6px 12px;font-weight:bold;border-radius:5px}
             QLabel#antennaTitle{color:white;font-size:12pt;font-weight:bold}
-            QFrame#antennaHeader{background:#205487;border-radius:4px}
+            QFrame#antennaHeader{background:#183e70;border-radius:5px}
             QFrame#antennaHeader QLabel{color:white}
-            QFrame#antennaHeader QLabel#stateStopped{background:#eef1f5;color:#43536a;border:1px solid #aab9c8}
-            QFrame#antennaHeader QLabel#stateBusy{background:#d4e9ff;color:#164b82;border:1px solid #80b3e8}
-            QFrame#antennaHeader QLabel#stateGood{background:#d4f4dc;color:#185c32;border:1px solid #85c69a}
-            QFrame#antennaHeader QLabel#stateFault{background:#ffe0e0;color:#9d2020;border:1px solid #dd9090}
-            QWidget#manualPad{background:#eaf2fc;border:1px solid #c7d8ee;border-radius:6px}
-            QWidget#manualPad QLabel#bold{color:#205487;font-weight:bold}
-            QLabel#bold{font-weight:700}
-            QFrame#panel{background:#f9fbff;border:1px solid #c5d7ea;border-radius:7px}
-            QPushButton{background:#fff;color:#111820;border:1px solid #cfd3d6;border-radius:8px;padding:4px 10px;min-height:20px;min-width:62px}
-            QPushButton:hover{background:#eef4fb;border-color:#9bbbe0}
-            QPushButton[jogActive="true"]{background:#1675d1;color:white;border:2px solid #0756a7}
-            QPushButton:pressed{background:#cfe0f4;border:2px solid #4d87c7;padding:3px 9px}
-            QPushButton#primary{background:#121820;color:white;border-color:#121820}
-            QPushButton#primary:hover{background:#243244;border-color:#243244}
-            QPushButton#primary:pressed{background:#36506f;border:2px solid #79aee8;padding:3px 9px}
-            QPushButton#danger{color:#e74b2c;border-color:#e74b2c}
-            QPushButton#danger:hover{background:#fff0ed}
-            QPushButton#danger:pressed{background:#ffd7ce;border:2px solid #e74b2c;padding:3px 9px}
-            QLineEdit{background:white;color:#111820;border:1px solid #d8dadd;border-radius:8px;padding:3px 7px}
-            QLabel#stateGood{background:#ead7c9;border:1px solid #dcc2ae;padding:5px 8px}
-            QLabel#stateBusy{background:#d9e7f8;border:1px solid #bed3ed;padding:5px 8px}
-            QLabel#stateStopped{background:#eeeeed;border:1px solid #d2d2d2;padding:5px 8px}
-            QLabel#stateFault,QLabel#faultTag{background:#ffd9d9;color:#b00000;border:1px solid #e3a2a2;padding:5px 8px}
-            QLabel#safe{background:#ead7c9;border:1px solid #dcc2ae;padding:5px 8px}
-            QPlainTextEdit#eventView{background:#fafafa;color:#1f252b;border:none;font-family:Arial,Helvetica,sans-serif;font-size:10pt}
+            QFrame#antennaHeader QLabel#stateStopped{background:#e5edf5;color:#3c5570;border:1px solid #adc2d6;border-radius:4px;padding:5px 10px}
+            QFrame#antennaHeader QLabel#stateBusy{background:#1678d1;color:white;border:1px solid #77b9f0;border-radius:4px;padding:5px 10px}
+            QFrame#antennaHeader QLabel#stateGood{background:#1f994e;color:white;border:1px solid #80c89b;border-radius:4px;padding:5px 10px}
+            QFrame#antennaHeader QLabel#stateFault{background:#c92d3e;color:white;border:1px solid #e99ca3;border-radius:4px;padding:5px 10px}
+            QFrame#panel{background:#ffffff;border:1px solid #c7d8e9;border-radius:7px}
+            QWidget#manualPad{background:#e6f0fc;border:1px solid #b8d0eb;border-radius:7px}
+            QWidget#manualPad QLabel#bold{color:#174a80;font-weight:bold}
+            QLabel#manualSummary{color:#526e8c;font-weight:bold;padding:4px}
+            QLabel#manualSummary[moving="true"]{color:#168144}
+            QLabel#systemIndicator{color:#7c8c9c;font-weight:bold}
+            QLabel#systemIndicator[active="true"]{color:#188b47}
+            QPushButton{background:#ffffff;color:#294560;border:1px solid #bfd0e1;border-radius:6px;padding:5px 11px;min-height:22px;min-width:68px;font-weight:600}
+            QPushButton:hover{background:#e8f2ff;border-color:#4c95dc}
+            QPushButton:pressed{background:#c7e2ff;border:2px solid #287ac7}
+            QPushButton#connectAction{background:#1d9b54;color:white;border:1px solid #137a41}
+            QPushButton#connectAction:hover{background:#167f44}
+            QPushButton#disconnectAction{background:#435a73;color:white;border:1px solid #34465b}
+            QPushButton#toolAction{background:#f7faff;color:#2d4c6d;border:1px solid #c5d5e6}
+            QPushButton#trackAction{background:#208e4d;color:white;border:1px solid #16733c}
+            QPushButton#stopTrackAction{background:#38495c;color:white;border:1px solid #2b3948}
+            QPushButton#serviceAction{background:#6b7787;color:white;border:1px solid #556272}
+            QPushButton#parkAction{background:#286ab5;color:white;border:1px solid #1d5796}
+            QPushButton#emergencyAction{background:#c92939;color:white;border:2px solid #a71c2a;font-weight:bold;min-width:106px}
+            QPushButton#manualStop{background:#d12d3e;color:white;border:1px solid #a51d2e;font-weight:bold}
+            QPushButton#jogButton{background:#f7fbff;color:#22517e;border:1px solid #8bb6e0;font-weight:bold}
+            QPushButton#jogButton[jogActive="true"]{background:#1879dc;color:white;border:2px solid #0757a7}
+            QPushButton#sectionToggle{text-align:left;background:#dfeaf7;color:#205487;font-weight:bold;border-radius:5px;min-height:19px;padding:4px 10px}
+            QComboBox#manualMode{background:#ffffff;color:#174a80;border:1px solid #86add6;border-radius:5px;padding:5px;font-weight:bold}
+            QLineEdit{background:white;color:#152f49;border:1px solid #c3d3e4;border-radius:5px;padding:4px 7px}
+            QLabel#stateGood{background:#d4f2dc;color:#185f33;border:1px solid #8bc69c;padding:5px 8px}
+            QLabel#stateBusy{background:#d5e9ff;color:#15528d;border:1px solid #8cbce8;padding:5px 8px}
+            QLabel#stateStopped{background:#e8edf3;color:#50647a;border:1px solid #c2ceda;padding:5px 8px}
+            QLabel#stateFault,QLabel#faultTag{background:#ffe1e3;color:#a6192c;border:1px solid #dba1a8;padding:5px 8px}
+            QLabel#safe{background:#d6f3dd;color:#186334;border:1px solid #91caa0;padding:5px 8px;font-weight:bold}
+            QPlainTextEdit#eventView{background:#ffffff;color:#29435c;border:0;font-family:Arial,Helvetica,sans-serif;font-size:10pt}
         """)
     def emit(self,fn,arg=None): self.events.put((fn,arg))
     def process_events(self):
