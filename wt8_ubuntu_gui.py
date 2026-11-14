@@ -70,17 +70,18 @@ class AntennaCard(Panel):
         g.addLayout(telemetry,1,0,1,1,Qt.AlignVCenter)
         c=QWidget(); c.setObjectName('manualPad'); cg=QGridLayout(c); cg.setContentsMargins(0,0,0,0); cg.setHorizontalSpacing(6); cg.setVerticalSpacing(6)
         mode=QHBoxLayout(); mode.addWidget(bold('MANUAL CONTROL'))
-        self.manual_selector=QComboBox(); self.manual_selector.addItems(['MOMENTARY','LATCHED']); self.manual_selector.setMinimumWidth(115)
+        self.manual_selector=QComboBox(); self.manual_selector.addItems(['MOMENTARY','LATCHED']); self.manual_selector.setMinimumWidth(115); self.manual_selector.setObjectName('manualMode')
         self.manual_selector.currentTextChanged.connect(lambda value:self.jog_mode_changed.emit(self.name,value))
+        self.manual_selector.currentTextChanged.connect(lambda value:self.manual_hint.setText('Click active direction again to stop' if value=='LATCHED' else 'Hold a direction button to move'))
         mode.addWidget(self.manual_selector); cg.addLayout(mode,0,0,1,3)
         for text,direction,row,col in [('N / EL+',Direction.EL_UP.value,1,1),('W / AZ-',Direction.AZ_CCW.value,2,0),('E / AZ+',Direction.AZ_CW.value,2,2),('S / EL-',Direction.EL_DOWN.value,3,1)]:
-            b=btn(text); b.setFixedSize(100,34); b.setAutoRepeat(False)
+            b=btn(text); b.setObjectName('jogButton'); b.setFixedSize(100,34); b.setAutoRepeat(False)
             b.pressed.connect(lambda d=direction:self.jog_pressed.emit(self.name,d))
             b.released.connect(lambda d=direction:self.jog_released.emit(self.name,d))
             self.jog_buttons[direction]=b; cg.addWidget(b,row,col)
-        stop=btn('STOP','danger'); stop.setFixedSize(100,34); stop.clicked.connect(lambda:self.stop_clicked.emit(self.name)); cg.addWidget(stop,2,1)
-        self.manual_summary=lbl('AZ stopped | EL stopped','muted'); cg.addWidget(self.manual_summary,4,0,1,3)
-        self.manual_hint=lbl('Click direction again to stop in LATCHED mode','muted'); cg.addWidget(self.manual_hint,5,0,1,3)
+        stop=btn('■ STOP','manualStop'); stop.setFixedSize(100,34); stop.clicked.connect(lambda:self.stop_clicked.emit(self.name)); cg.addWidget(stop,2,1)
+        self.manual_summary=lbl('● AZ: stopped    ● EL: stopped','manualSummary'); cg.addWidget(self.manual_summary,4,0,1,3)
+        self.manual_hint=lbl('Hold a direction button to move','muted'); cg.addWidget(self.manual_hint,5,0,1,3)
         cg.setContentsMargins(12,8,12,8)
         g.addWidget(c,1,1,1,1,Qt.AlignCenter)
         g.setColumnStretch(0,5); g.setColumnStretch(1,3); g.setColumnStretch(2,0)
@@ -91,7 +92,9 @@ class AntennaCard(Panel):
             button.style().unpolish(button); button.style().polish(button)
         az=next((labels[d] for d in directions if d in (Direction.AZ_CW.value,Direction.AZ_CCW.value)),'stopped')
         el=next((labels[d] for d in directions if d in (Direction.EL_UP.value,Direction.EL_DOWN.value)),'stopped')
-        self.manual_summary.setText(f'AZ {az} | EL {el}')
+        self.manual_summary.setText(f'● AZ: {az}    ● EL: {el}')
+        self.manual_summary.setProperty('moving',bool(directions))
+        self.manual_summary.style().unpolish(self.manual_summary); self.manual_summary.style().polish(self.manual_summary)
         if directions and self.state.text()!='FAULT': self.set_state('MANUAL '+ ' + '.join(labels[d] for d in directions))
     def set_position(self,pos: Optional[Position]):
         self.az.setText('--.--' if pos is None else f'{pos.azimuth:06.2f}'); self.el.setText('--.--' if pos is None else f'{pos.elevation:05.2f}')
@@ -640,13 +643,13 @@ class WT8App(QWidget):
         title=lbl(f'WT8 {APP_VERSION} — ANTENNA CONTROL & TRACKING','appTitle'); main.addWidget(title)
         self.overview=lbl('● EAST: Disconnected     ● WEST: Disconnected     |     Source: None     |     Mode: IDLE','overview')
         main.addWidget(self.overview)
-        top1=QHBoxLayout(); top1.setSpacing(4)
-        row1=[('Connect','primary',self.connect_all),('Disconnect','',self.disconnect_all),('Limits','',self.open_limits),('Observer','',self.open_observer),('Tracking','',self.open_tracking_dialog),('Sources','',self.open_sources_dialog),('Calibration','',self.open_calibration_dialog),('Peak Cal','',self.open_peak_calibration),('Scan Cal','',self.open_scan_dialog),('Y Factor','',self.open_yfactor_dialog),('Encoders','',self.open_encoders_dialog),('STOP ALL','danger',self.stop_all)]
+        top1=QHBoxLayout(); top1.setSpacing(5)
+        row1=[('● Connect','connectAction',self.connect_all),('⏻ Disconnect','disconnectAction',self.disconnect_all),('⚙ Limits','toolAction',self.open_limits),('◎ Observer','toolAction',self.open_observer),('⌖ Tracking','toolAction',self.open_tracking_dialog),('★ Sources','toolAction',self.open_sources_dialog),('◈ Calibration','toolAction',self.open_calibration_dialog),('⌁ Peak Cal','toolAction',self.open_peak_calibration),('▦ Scan Cal','toolAction',self.open_scan_dialog),('◉ Y Factor','toolAction',self.open_yfactor_dialog),('≡ Encoders','toolAction',self.open_encoders_dialog),('■ STOP ALL','emergencyAction',self.stop_all)]
         for text,name,cb in row1:
             b=btn(text,name); b.clicked.connect(cb); top1.addWidget(b)
         top1.addStretch(1); main.addLayout(top1)
         top2=QHBoxLayout(); top2.setSpacing(4)
-        row2=[('Track Sun','',lambda:self.start_tracking('sun')),('Track Moon','',lambda:self.start_tracking('moon')),('Track Source','',lambda:self.start_tracking('source')),('Stop Track','',self.stop_tracking),('Service','',self.service_all),('Park','',self.park_all)]
+        row2=[('▶ Track Sun','trackAction',lambda:self.start_tracking('sun')),('▶ Track Moon','trackAction',lambda:self.start_tracking('moon')),('▶ Track Source','trackAction',lambda:self.start_tracking('source')),('■ Stop Track','stopTrackAction',self.stop_tracking),('⚒ Service','serviceAction',self.service_all),('P Park','parkAction',self.park_all)]
         for text,name,cb in row2:
             b=btn(text,name); b.clicked.connect(cb); top2.addWidget(b)
         top2.addStretch(1); main.addLayout(top2)
@@ -669,14 +672,14 @@ class WT8App(QWidget):
         main.addWidget(self.power); self.power.hide()
         bottom=QHBoxLayout(); bottom.setSpacing(8)
         ev=Panel(); ev.setMinimumHeight(130); eg=QGridLayout(ev); eg.setContentsMargins(9,8,9,8)
-        eg.addWidget(bold('EVENT LOG'),0,0); ob=btn('Open Log'); ob.clicked.connect(self.open_log_hint); eg.addWidget(ob,0,3,Qt.AlignRight)
+        eg.addWidget(bold('▤ EVENT LOG'),0,0); ob=btn('Open Log'); ob.clicked.connect(self.open_log_hint); eg.addWidget(ob,0,3,Qt.AlignRight)
         self.event_view=QPlainTextEdit(); self.event_view.setReadOnly(True); self.event_view.setObjectName('eventView'); self.event_view.setMinimumHeight(82)
         eg.addWidget(self.event_view,1,0,1,4); bottom.addWidget(ev,3)
         status_panel=Panel(); sg=QVBoxLayout(status_panel); sg.setContentsMargins(12,9,12,9); sg.setSpacing(7)
-        sg.addWidget(bold('SYSTEM STATUS'))
-        self.connection_summary=lbl('Antenna controllers: Disconnected')
-        self.tracking_summary=lbl('Tracking: Stopped')
-        self.motion_summary=lbl('Motion: Stopped')
+        sg.addWidget(bold('● SYSTEM STATUS'))
+        self.connection_summary=lbl('● Antenna controllers: Disconnected','systemIndicator')
+        self.tracking_summary=lbl('● Tracking: Stopped','systemIndicator')
+        self.motion_summary=lbl('● Motion: Stopped','systemIndicator')
         self.status_summary=lbl('Ready')
         for widget in (self.connection_summary,self.tracking_summary,self.motion_summary,self.status_summary):
             widget.setWordWrap(True); sg.addWidget(widget)
@@ -742,12 +745,15 @@ class WT8App(QWidget):
     def refresh_system_status(self):
         if not hasattr(self,'connection_summary'): return
         total=len(self.configs); connected=len(self.sessions)
-        self.connection_summary.setText(f'Antenna controllers: Connected ({connected}/{total})' if connected else 'Antenna controllers: Disconnected')
+        self.connection_summary.setText(f'● Antenna controllers: Connected ({connected}/{total})' if connected else '● Antenna controllers: Disconnected')
+        for widget,active in ((self.connection_summary,connected>0),(self.tracking_summary,bool(self.tracking_kind)),(self.motion_summary,bool(self.manual_axes or self.park_active or self.service_active))):
+            widget.setProperty('active',active)
+            widget.style().unpolish(widget); widget.style().polish(widget)
         tracking='Active' if self.tracking_kind else 'Stopped'
-        self.tracking_summary.setText(f'Tracking: {tracking}')
+        self.tracking_summary.setText(f'● Tracking: {tracking}')
         manual=', '.join(f'{name} {axis} {entry["direction"]}' for (name,axis),entry in self.manual_axes.items())
         fixed='Parking' if self.park_active else ('Servicing' if self.service_active else '')
-        self.motion_summary.setText('Motion: '+(fixed or manual or 'Stopped'))
+        self.motion_summary.setText('● Motion: '+(fixed or manual or 'Stopped'))
         self.status_summary.setText(self.status.text())
         if hasattr(self,'overview'):
             states='     '.join(f'● {name.upper()}: '+('Connected' if name in self.sessions else 'Disconnected') for name in self.cards)
