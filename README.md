@@ -1,0 +1,45 @@
+# WT7
+
+WT7 is the PyQt5 version of the two-antenna radio astronomy controller. It keeps the established safety/protocol backend, B210 dual-channel power primitives, source position calculations, event logging, and configuration format, while introducing a new Qt main operating surface.
+
+## Install
+
+```bash
+python3 -m pip install -r requirements.txt
+```
+
+On Ubuntu, also install the system packages required for serial access and B210 support as before: pyserial access through the `dialout` group, UHD/SoapySDR for the B210, and the correct persistent `/dev/serial/by-id/...` paths in the ini file.
+
+## Configure
+
+```bash
+cp wt7_ubuntu.ini.example wt7_ubuntu.ini
+nano wt7_ubuntu.ini
+```
+
+Existing prior-version `.ini` files can normally be copied to `wt7_ubuntu.ini`; section names are unchanged. Check antenna ports, B210 frequency/rate/gain, observer location, limits, park positions, and selected source before driving antennas.
+
+## Run
+
+```bash
+python3 wt7_ubuntu_gui.py --config wt7_ubuntu.ini
+```
+
+## Notes
+
+The PyQt5 control surface includes connect/disconnect, guarded manual jogs, Sun/Moon/source tracking, park, live Sun/Moon/time reference, live antenna positions, B210 dual-channel power display/logging, B210 calibration, scan calibration, Y factor, source management, limits, observer settings, tracking settings, encoder scan, peak calibration, and manual calibration.
+
+The renamed Tkinter implementation remains as `wt7_tk_legacy_gui.py` only as a historical fallback/reference while WT7 stabilises.
+
+## Key Files
+
+- `wt7_ubuntu_gui.py` - PyQt5 main operator interface
+- `wt7_tk_legacy_gui.py` - historical Tkinter GUI fallback/reference
+- `wt7_antenna.py` - Arduino protocol, controller session, and guarded motion
+- `wt7_config.py` - `.ini` loading/saving
+- `wt7_b210_power.py` - B210 dual-channel power meter primitives
+- `wt7_astro.py` / `wt7_solar.py` - source, Sun, and Moon position calculations
+- `wt7_logging.py` - JSON-lines event log
+- `WT7_REQUIREMENTS.md` - carried-forward system requirements/specification
+- `WT7_APP_DESCRIPTION.md` - high-level and detailed application description with consolidated requirements
+- `output/pdf/WT7_APP_DESCRIPTION.pdf` - PDF version of the application description
