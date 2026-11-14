@@ -71,3 +71,28 @@ The original WT7 application-description PDF remains in WT7. The GitHub connecto
 - New headless Qt GUI tests: `tests/test_wt8_fixed_gui.py`.
 
 **Hardware safety:** Stop Track now issues stop commands for both antennas during Park/Service. Verify physical response, encoder error updates and safe cancellation under supervision before routine use. Software changes and tests have not yet been exercised on real hardware.
+
+## Experimental refreshed GUI (feature/manual-latched-gui-redesign)
+
+**Development version v0.4-dev; NOT validated on live antenna hardware.**
+The `main` branch is unchanged. Pre-redesign rollback branch:
+`backup/pre-gui-redesign-2026-11-14`.
+
+- Refreshed blue title/header, light-blue panel styling, enlarged window and antenna cards.
+- Independent per-antenna **MOMENTARY** (press-and-hold) and **LATCHED** (click to start, click same direction to stop) selectors; startup default is MOMENTARY.
+- N/S (EL) and E/W (AZ) may run concurrently, each with an independent guarded jog worker and stop event. Opposite-direction requests wait for the previous axis worker to finish.
+- Both axes stop on individual antenna STOP, STOP ALL, disconnect, or mode switch. Automatic Park/Service/tracking commands reject while manual movement is active.
+- Existing position/encoder display, AZ/EL error/rate fields, source/HA, Sun/Moon, **LMST**, UTC/local time, timeout, Park/Service, all tracking controls, calibration dialogs, B210 controls and logs are retained.
+- No changes to tracking geometry, precision fixed-position algorithms or Park/Service auto-disconnect. One exception: guarded-jog exception logging fixed a pre-existing undefined-variable bug.
+- The previous illustrative mockup was conceptual; this branch deliberately retains all existing functions and rearranges only manual controls and visual styling.
+
+### Run the experimental branch
+
+```bash
+cd ~/WT8-DEV
+git pull origin feature/manual-latched-gui-redesign
+QT_QPA_PLATFORM=offscreen python3 -m unittest discover -s tests -v
+python3 wt8_ubuntu_gui.py --config wt8_ubuntu.ini
+```
+
+**Do not operate the stable and development copies against the same controller simultaneously.** Verify STOP, reversal, software limits, motion timeout and both-axis control under attended conditions before using the development build operationally. For rollback, use your existing `main` checkout, or switch the development checkout to `backup/pre-gui-redesign-2026-11-14` after stopping the application.
