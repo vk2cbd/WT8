@@ -745,6 +745,7 @@ class WT8App(QWidget):
             self.sessions[name]=session; self.positions[name]=pos; self.cards[name].set_position(pos); self.cards[name].set_state('STOPPED'); self.set_status(f'{name} connected. Connected {len(self.sessions)}/{len(self.configs)} antennas.')
         else: self.cards[name].set_state('FAULT'); self.set_status(f'{name} connect fault: {error}')
     def disconnect_all(self):
+        for name in self.cards: self.stop_jog(name)
         self.service_stop.set(); self.park_stop.set()
         self.stop_all(); sessions=list(self.sessions.items()); self.sessions.clear()
         def worker():
@@ -768,6 +769,7 @@ class WT8App(QWidget):
         self.set_status('Tracking stopped.')
     def stop_all(self):
         self.clear_fixed_target_display()
+        for name in self.cards: self.stop_jog(name)
         self.service_stop.set(); self.park_stop.set(); self.tracking_stop.set(); self.tracking_nominal_az.clear(); self.tracking_az_comp_force.clear(); [ev.set() for ev in self.jog_stops.values()]
         for n,s in list(self.sessions.items()): self.run_thread(lambda s=s:s.stop_all(),f'Stop{n}'); self.position_rate_state.pop(n,None); self.cards[n].set_state('STOPPED')
         self.set_status('Stopped.')
@@ -778,22 +780,78 @@ class WT8App(QWidget):
         if s: self.run_thread(lambda:s.stop_all(),f'Stop{name}')
         self.position_rate_state.pop(name,None)
         self.cards[name].set_state('STOPPED')
+    def manual_axis(self,direction):
+        return 'AZ' if direction in (Direction.AZ_CW.value,Direction.AZ_CCW.value) else 'EL'
+    def change_manual_mode(self,name,mode):
+        self.manual_modes[name]=mode
+        self.stop_jog(name)
+        self.set_status(f'{name} manual mode: {mode}')
+    def release_jog(self,name,direction):
+        if self.manual_modes.get(name,'MOMENTARY')=='MOMENTARY':
+            key=(name,self.manual_axis(direction))
+            entry=self.manual_axes.get(key)
+            if entry and entry['direction']==direction: self.stop_manual_axis(name,key[1])
     def start_jog(self,name,direction_text):
-        if self.service_active or self.park_active: self.set_status('Jog rejected: fixed-position movement active.'); return
-        s=self.sessions.get(name)
-        if not s: self.set_status(f'{name} is not connected.'); return
-        stop=threading.Event(); self.jog_stops[name]=stop; direction=Direction(direction_text); self.cards[name].set_state('MANUAL')
-        def update(p): self.emit(lambda data:self.update_position(*data),(name,p))
+        if self.service_active or self.park_active or self.tracking_kind or self.tracking_starting:
+            self.set_status('Manual jog rejected: automatic motion active.'); return
+        if (self.scan_thread and self.scan_thread.is_alive()) or self.yfactor_active or (self.peak_thread and self.peak_thread.is_alive()):
+            self.set_status('Manual jog rejected: calibration or scan active.'); return
+        session=self.sessions.get(name)
+        if not session: self.set_status(f'{name} not connected.'); return
+        axis=self.manual_axis(direction_text); key=(name,axis)
+        current=self.manual_axes.get(key)
+        latched=self.manual_modes.get(name,'MOMENTARY')=='LATCHED'
+        if current:
+            if current['direction']==direction_text:
+                if latched: self.stop_manual_axis(name,axis)
+                return
+            self.manual_pending[key]=direction_text
+            current['stop'].set()
+            return
+        self.launch_manual_axis(name,axis,direction_text,session)
+    def launch_manual_axis(self,name,axis,direction_text,session):
+        key=(name,axis)
+        if key in self.manual_axes or self.sessions.get(name) is not session: return
+        stop=threading.Event()
+        entry={'direction':direction_text,'stop':stop}
+        self.manual_axes[key]=entry
+        self.refresh_manual_display(name)
+        def update(pos): self.emit(lambda data:self.update_position(*data),(name,pos))
         def worker():
-            try: s.guarded_jog(direction,s.config.gui_speed,None,stop,update)
-            except Exception as e: self.emit(lambda data:self.mark_fault(*data),(name,str(e)))
-            finally: self.emit(lambda n:self.cards[n].set_state('STOPPED'),name)
-        self.run_thread(worker,f'Jog{name}')
+            error=None
+            try: session.guarded_jog(Direction(direction_text),session.config.gui_speed,None,stop,update)
+            except Exception as exc: error=str(exc)
+            finally: self.emit(lambda data:self.manual_axis_finished(*data),(name,axis,entry,error))
+        entry['thread']=self.run_thread(worker,f'Manual{name}{axis}')
+    def manual_axis_finished(self,name,axis,entry,error):
+        key=(name,axis)
+        if self.manual_axes.get(key) is not entry: return
+        self.manual_axes.pop(key,None)
+        if error:
+            self.manual_pending.pop(key,None)
+            self.stop_jog(name)
+            self.mark_fault(name,error)
+        else:
+            pending=self.manual_pending.pop(key,None)
+            if pending and name in self.sessions and not self.park_active and not self.service_active and not self.tracking_kind:
+                self.launch_manual_axis(name,axis,pending,self.sessions[name])
+        self.refresh_manual_display(name)
+    def refresh_manual_display(self,name):
+        card=self.cards.get(name)
+        if not card: return
+        directions=[entry['direction'] for (n,_),entry in self.manual_axes.items() if n==name]
+        card.set_manual_active(directions)
+        if not directions and card.state.text().startswith('MANUAL'): card.set_state('STOPPED')
+    def stop_manual_axis(self,name,axis):
+        key=(name,axis)
+        self.manual_pending.pop(key,None)
+        entry=self.manual_axes.get(key)
+        if entry: entry['stop'].set()
     def stop_jog(self,name):
-        ev=self.jog_stops.get(name)
-        if ev: ev.set()
+        for axis in ('AZ','EL'): self.stop_manual_axis(name,axis)
     def start_tracking(self,kind):
         if self.service_active or self.park_active: self.set_status('Tracking rejected: fixed-position movement active.'); return
+        if self.manual_axes: self.set_status('Tracking rejected: stop manual motion first.'); return
         self.clear_fixed_target_display()
         if not self.sessions: self.set_status('Connect antennas before tracking.'); return
         if self.tracking_starting:
@@ -968,6 +1026,7 @@ class WT8App(QWidget):
             self.set_status(f'{mode} verified; {len(failures)} controller disconnect(s) failed.')
 
     def service_all(self):
+        if self.manual_axes: self.set_status("Service rejected: stop manual motion first."); return
         if not self.sessions:
             self.set_status('Connect antennas before Service.'); return
         if self.service_active or self.park_active:
@@ -1037,6 +1096,7 @@ class WT8App(QWidget):
         self.run_thread(worker,'Service')
 
     def park_all(self):
+        if self.manual_axes: self.set_status("Park rejected: stop manual motion first."); return
         if self.service_active or self.park_active:
             self.set_status('Park rejected: fixed-position movement active.'); return
         if not self.sessions:
