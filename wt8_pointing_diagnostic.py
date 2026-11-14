@@ -44,12 +44,11 @@ def astropy_altaz(target, latitude, longitude, when, ra_hours=None, dec_deg=None
 
 
 def angular_separation(az1, el1, az2, el2):
+    """Great-circle angular separation in arcminutes (stable for small offsets)."""
     a1, e1, a2, e2 = map(math.radians, (az1, el1, az2, el2))
-    x1 = (math.cos(e1) * math.cos(a1), math.cos(e1) * math.sin(a1), math.sin(e1))
-    x2 = (math.cos(e2) * math.cos(a2), math.cos(e2) * math.sin(a2), math.sin(e2))
-    cross = math.sqrt(sum((x1[(i+1)%3]*x2[(i+2)%3]-x1[(i+2)%3]*x2[(i+1)%3])**2 for i in range(3)))
-    dot = max(-1.0, min(1.0, sum(x*y for x, y in zip(x1, x2))))
-    return math.degrees(math.atan2(cross, dot)) * 60
+    delta_az = a2 - a1
+    hav = math.sin((e2 - e1) / 2.0)**2 + math.cos(e1) * math.cos(e2) * math.sin(delta_az / 2.0)**2
+    return math.degrees(2.0 * math.asin(math.sqrt(max(0.0, min(1.0, hav))))) * 60
 
 
 def main(argv=None):
