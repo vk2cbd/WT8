@@ -631,11 +631,11 @@ class WT8App(QWidget):
     def __init__(self,config_path):
         super().__init__(); self.config_path=Path(config_path); self.configs=load_configs(self.config_path); self.site=load_site_config(self.config_path); self.power_config=load_power_config(self.config_path); self.sources=load_sources(self.config_path); self.selected_source_name=self.site.selected_source if self.site.selected_source in self.sources else next(iter(self.sources), '')
         self.event_log=EventLogger(Path('logs'),self.site.log_retention_days,self.site.log_level); self.state_store=AppStateStore(); self.sessions={}; self.positions={}; self.position_rate_state={}; self.cards={}; self.current_target=None; self.card_targets={}; self.tracking_kind=''; self.tracking_stop=threading.Event(); self.tracking_thread=None; self.service_stop=threading.Event(); self.service_active=False; self.park_stop=threading.Event(); self.park_active=False; self.fixed_target_mode=''; self.fixed_target_generation=0; self.tracking_starting=False; self.jog_stops={}; self.manual_axes={}; self.manual_pending={}; self.manual_modes={}; self.b210_stop=threading.Event(); self.b210_thread=None; self.events=queue.Queue(); self.event_history=[]; self.log_handle=None; self.log_writer=None; self.scan_stop=threading.Event(); self.scan_thread=None; self.scan_antenna_name=''; self.scan_axis=None; self.scan_offset_degrees=0.0; self.scan_offset_lock=threading.Lock(); self.scan_result_dialogs=[]; self.yfactor_stop=threading.Event(); self.yfactor_thread=None; self.yfactor_active=False; self.yfactor_hot_label=''; self.peak_stop=threading.Event(); self.peak_thread=None; self.tracking_nominal_az={}; self.tracking_az_comp_force={}; self.modeless_dialogs=[]; self.active_scan_antenna=''; self.active_scan_dialog=None; self.scan_resume_kind=''; self.last_user_activity=time.monotonic(); self.timeout_in_progress=False
-        self.setWindowTitle(f'WT8 — Antenna Control & Tracking {APP_VERSION}'); self.resize(1460,900); self.setMinimumSize(1250,810); self.build_ui(); self.style_ui(); self.set_status('Load config, connect antennas, then use guarded jogs.'); self.event_log.info('APP_START',version=APP_VERSION,config=str(config_path))
+        self.setWindowTitle(f'WT8 — Antenna Control & Tracking {APP_VERSION}'); self.resize(1320,860); self.setMinimumSize(1180,780); self.build_ui(); self.style_ui(); self.set_status('Load config, connect antennas, then use guarded jogs.'); self.event_log.info('APP_START',version=APP_VERSION,config=str(config_path))
         QApplication.instance().installEventFilter(self)
         self.t_ref=QTimer(self); self.t_ref.timeout.connect(self.update_reference); self.t_ref.start(1000); self.t_evt=QTimer(self); self.t_evt.timeout.connect(self.process_events); self.t_evt.start(100); self.t_pos=QTimer(self); self.t_pos.timeout.connect(self.poll_positions); self.t_pos.start(1000)
     def build_ui(self):
-        main=QVBoxLayout(self); main.setContentsMargins(18,10,18,10); main.setSpacing(8)
+        main=QVBoxLayout(self); main.setContentsMargins(10,8,10,8); main.setSpacing(6)
         title=lbl(f'WT8 {APP_VERSION} — ANTENNA CONTROL & TRACKING','appTitle'); main.addWidget(title)
         top1=QHBoxLayout(); top1.setSpacing(7)
         row1=[('Connect','primary',self.connect_all),('Disconnect','',self.disconnect_all),('Limits','',self.open_limits),('Observer','',self.open_observer),('Tracking','',self.open_tracking_dialog),('Sources','',self.open_sources_dialog),('Calibration','',self.open_calibration_dialog),('Peak Cal','',self.open_peak_calibration),('Scan Cal','',self.open_scan_dialog),('Y Factor','',self.open_yfactor_dialog),('Encoders','',self.open_encoders_dialog),('STOP ALL','danger',self.stop_all)]
@@ -661,7 +661,21 @@ class WT8App(QWidget):
         for name in self.configs:
             card=AntennaCard(name); card.jog_pressed.connect(self.start_jog); card.jog_released.connect(self.release_jog); card.jog_mode_changed.connect(self.change_manual_mode); card.stop_clicked.connect(self.stop_antenna); self.cards[name]=card; main.addWidget(card)
         self.power=B210Panel(self.power_config); self.power.app=self; self.power.load_active_calibrations(self.config_path,self.power_config); self.power.start_clicked.connect(self.start_b210); self.power.stop_clicked.connect(self.stop_b210); self.power.cal_clicked.connect(self.open_b210_calibration); self.power.log_start_clicked.connect(self.start_b210_log); self.power.log_stop_clicked.connect(self.stop_b210_log); main.addWidget(self.power)
-        ev=Panel(); ev.setMinimumHeight(96); eg=QGridLayout(ev); eg.setContentsMargins(9,8,9,8); eg.addWidget(bold('RECENT EVENTS'),0,0); ob=btn('Open Log'); ob.clicked.connect(self.open_log_hint); eg.addWidget(ob,0,3,Qt.AlignRight); self.event_view=QPlainTextEdit(); self.event_view.setReadOnly(True); self.event_view.setObjectName('eventView'); self.event_view.setMinimumHeight(58); eg.addWidget(self.event_view,1,0,1,4); main.addWidget(ev); main.addStretch(1)
+        bottom=QHBoxLayout(); bottom.setSpacing(8)
+        ev=Panel(); ev.setMinimumHeight(124); eg=QGridLayout(ev); eg.setContentsMargins(9,8,9,8)
+        eg.addWidget(bold('EVENT LOG'),0,0); ob=btn('Open Log'); ob.clicked.connect(self.open_log_hint); eg.addWidget(ob,0,3,Qt.AlignRight)
+        self.event_view=QPlainTextEdit(); self.event_view.setReadOnly(True); self.event_view.setObjectName('eventView'); self.event_view.setMinimumHeight(82)
+        eg.addWidget(self.event_view,1,0,1,4); bottom.addWidget(ev,3)
+        status_panel=Panel(); sg=QVBoxLayout(status_panel); sg.setContentsMargins(12,9,12,9); sg.setSpacing(7)
+        sg.addWidget(bold('SYSTEM STATUS'))
+        self.connection_summary=lbl('Antenna controllers: Disconnected')
+        self.tracking_summary=lbl('Tracking: Stopped')
+        self.motion_summary=lbl('Motion: Stopped')
+        self.status_summary=lbl('Ready')
+        for widget in (self.connection_summary,self.tracking_summary,self.motion_summary,self.status_summary):
+            widget.setWordWrap(True); sg.addWidget(widget)
+        sg.addStretch(1); bottom.addWidget(status_panel,2)
+        main.addLayout(bottom); main.addStretch(1)
     def style_ui(self):
         self.setStyleSheet("""
             QWidget{background:#eef3f9;color:#1b2c40;font-family:Arial,Helvetica,sans-serif;font-size:10pt}
@@ -698,6 +712,7 @@ class WT8App(QWidget):
             try: fn,arg=self.events.get_nowait()
             except queue.Empty: break
             fn(arg)
+        self.refresh_system_status()
     def set_status(self,msg):
         self.status.setText(msg)
         line=f"{datetime.now().strftime('%H:%M:%S')}  {msg}"
@@ -706,6 +721,17 @@ class WT8App(QWidget):
             self.event_view.setPlainText('\n'.join(self.event_history))
             self.event_view.verticalScrollBar().setValue(0)
         self.state_store.set_status(msg,SystemRunState.IDLE)
+        self.refresh_system_status()
+    def refresh_system_status(self):
+        if not hasattr(self,'connection_summary'): return
+        total=len(self.configs); connected=len(self.sessions)
+        self.connection_summary.setText(f'Antenna controllers: Connected ({connected}/{total})' if connected else 'Antenna controllers: Disconnected')
+        tracking='Active' if self.tracking_kind else 'Stopped'
+        self.tracking_summary.setText(f'Tracking: {tracking}')
+        manual=', '.join(f'{name} {axis} {entry["direction"]}' for (name,axis),entry in self.manual_axes.items())
+        fixed='Parking' if self.park_active else ('Servicing' if self.service_active else '')
+        self.motion_summary.setText('Motion: '+(fixed or manual or 'Stopped'))
+        self.status_summary.setText(self.status.text())
     def eventFilter(self,obj,event):
         if event.type() in (QEvent.MouseButtonPress,QEvent.KeyPress):
             self.last_user_activity=time.monotonic()
@@ -861,6 +887,7 @@ class WT8App(QWidget):
         if not card: return
         directions=[entry['direction'] for (n,_),entry in self.manual_axes.items() if n==name]
         card.set_manual_active(directions)
+        self.refresh_system_status()
         if not directions and card.state.text().startswith('MANUAL'): card.set_state('STOPPED')
         if any(self.manual_axes):
             self.source_name.setText('Manual Control')
