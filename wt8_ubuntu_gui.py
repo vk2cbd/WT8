@@ -44,7 +44,7 @@ class Panel(QFrame):
 class AntennaCard(Panel):
     jog_pressed=pyqtSignal(str,str); jog_released=pyqtSignal(str,str); stop_clicked=pyqtSignal(str); jog_mode_changed=pyqtSignal(str,str)
     def __init__(self,name):
-        super().__init__(); self.name=name; self.setMinimumHeight(196); self.setMaximumHeight(260); self.jog_buttons={}
+        super().__init__(); self.name=name; self.setMinimumHeight(246); self.setMaximumHeight(310); self.jog_buttons={}
         g=QGridLayout(self); g.setContentsMargins(7,6,7,6); g.setHorizontalSpacing(10); g.setVerticalSpacing(5)
         title=bold(name.upper()); title.setObjectName('antennaTitle'); title.setMinimumWidth(72); self.state=lbl('DISCONNECTED','stateStopped'); lock_width(self.state,'DISCONNECTED',18)
         self.az=bold('--.--',18); self.el=bold('--.--',18); lock_width(self.az,'359.99',12); lock_width(self.el,'090.00',12)
