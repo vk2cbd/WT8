@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Optional
 from PyQt5.QtCore import Qt, QSize, QTimer, pyqtSignal, QEvent
 from PyQt5.QtGui import QFont, QPainter, QPen, QColor
-from PyQt5.QtWidgets import QApplication, QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFrame, QGridLayout, QHBoxLayout, QLabel, QLineEdit, QMessageBox, QPlainTextEdit, QPushButton, QStyle, QTabWidget, QTableWidget, QTableWidgetItem, QToolTip, QVBoxLayout, QWidget
+from PyQt5.QtWidgets import QApplication, QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFrame, QGridLayout, QHBoxLayout, QLabel, QLineEdit, QMessageBox, QPlainTextEdit, QPushButton, QScrollArea, QStyle, QTabWidget, QTableWidget, QTableWidgetItem, QToolTip, QVBoxLayout, QWidget
 from wt8_antenna import Axis, Direction, Position, SafeAntenna, shortest_angle_delta
 from wt8_astro import TargetPosition, local_sidereal_time, moon_equatorial, moon_position, source_position
 from wt8_b210_power import B210PowerMeter, B210PowerMeterConfig, B210PowerReading
@@ -655,7 +655,12 @@ class WT8App(QWidget):
         QApplication.instance().installEventFilter(self)
         self.t_ref=QTimer(self); self.t_ref.timeout.connect(self.update_reference); self.t_ref.start(1000); self.t_evt=QTimer(self); self.t_evt.timeout.connect(self.process_events); self.t_evt.start(100); self.t_pos=QTimer(self); self.t_pos.timeout.connect(self.poll_positions); self.t_pos.start(1000)
     def build_ui(self):
-        main=QVBoxLayout(self); main.setContentsMargins(10,8,10,8); main.setSpacing(6)
+        outer=QVBoxLayout(self); outer.setContentsMargins(0,0,0,0); outer.setSpacing(0)
+        scroll=QScrollArea(self); scroll.setObjectName('dashboardScroll'); scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        content=QWidget(); content.setObjectName('dashboardContent')
+        main=QVBoxLayout(content); main.setContentsMargins(10,8,10,8); main.setSpacing(6)
+        scroll.setWidget(content); outer.addWidget(scroll)
         title=lbl(f'WT8 {APP_VERSION} — ANTENNA CONTROL & TRACKING','appTitle'); main.addWidget(title)
         self.overview=lbl('● EAST: Disconnected     ● WEST: Disconnected     |     Source: None     |     Mode: IDLE','overview')
         main.addWidget(self.overview)
@@ -740,6 +745,7 @@ class WT8App(QWidget):
         # Palette and hierarchy intentionally mirror the approved dashboard mockup.
         self.setStyleSheet("""
             QWidget{background:#edf2f8;color:#20354c;font-family:Arial,Helvetica,sans-serif;font-size:10pt}
+            QScrollArea#dashboardScroll{border:0;background:#edf2f8}
             QLabel{background:transparent;border:none;color:#24384e}
             QLabel#muted{color:#6d8197}
             QLabel#bold{font-weight:700;color:#23486e}
