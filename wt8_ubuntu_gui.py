@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Optional
 from PyQt5.QtCore import Qt, QSize, QTimer, pyqtSignal, QEvent
 from PyQt5.QtGui import QFont, QPainter, QPen, QColor
-from PyQt5.QtWidgets import QApplication, QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFrame, QGridLayout, QHBoxLayout, QLabel, QLineEdit, QMessageBox, QPlainTextEdit, QPushButton, QScrollArea, QStyle, QTabWidget, QTableWidget, QTableWidgetItem, QToolTip, QVBoxLayout, QWidget
+from PyQt5.QtWidgets import QApplication, QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFrame, QGridLayout, QHBoxLayout, QLabel, QLineEdit, QMessageBox, QPlainTextEdit, QPushButton, QScrollArea, QSlider, QStyle, QTabWidget, QTableWidget, QTableWidgetItem, QToolTip, QVBoxLayout, QWidget
 from wt8_antenna import Axis, Direction, Position, SafeAntenna, shortest_angle_delta
 from wt8_astro import TargetPosition, local_sidereal_time, moon_equatorial, moon_position, source_position
 from wt8_b210_power import B210PowerMeter, B210PowerMeterConfig, B210PowerReading
@@ -18,6 +18,7 @@ from wt8_solar import sun_equatorial, sun_position
 from wt8_state import AppStateStore, SystemRunState
 from wt8_service import validate_service_target
 from wt8_precision import precision_fixed_slew, PositionCancelled
+from wt8_voice import VoiceAnnunciator
 APP_VERSION = "v0.4-dev"
 
 def hms(seconds: float) -> str:
@@ -42,7 +43,7 @@ RATE_MIN_INTERVAL_SECONDS = 0.15
 class Panel(QFrame):
     def __init__(self): super().__init__(); self.setObjectName('panel'); self.setFrameShape(QFrame.StyledPanel)
 class AntennaCard(Panel):
-    jog_pressed=pyqtSignal(str,str); jog_released=pyqtSignal(str,str); stop_clicked=pyqtSignal(str); jog_mode_changed=pyqtSignal(str,str)
+    jog_pressed=pyqtSignal(str,str); jog_released=pyqtSignal(str,str); stop_clicked=pyqtSignal(str); jog_mode_changed=pyqtSignal(str,str); state_changed=pyqtSignal(str,str)
     def __init__(self,name):
         super().__init__(); self.name=name; self.setMinimumHeight(238); self.jog_buttons={}
         g=QGridLayout(self); g.setContentsMargins(7,6,7,6); g.setHorizontalSpacing(14); g.setVerticalSpacing(5)
@@ -127,10 +128,12 @@ class AntennaCard(Panel):
         else: self.az_comp.setText(f'AZ comp {az_comp:+0.2f}' if abs(az_comp) >= 0.005 else 'AZ comp none')
         if pos: self.az_err.setText(f'{shortest_angle_delta(pos.azimuth,target.azimuth):+0.2f}'); self.el_err.setText(f'{target.elevation-pos.elevation:+0.2f}')
     def set_state(self,text):
+        changed=self.state.text()!=text.upper()
         self.state.setText(text.upper()); low=text.lower(); name='stateFault' if any(x in low for x in ['fault','timeout']) else ('stateBusy' if any(x in low for x in ['slew','park','servic','scan','yfactor','manual','connecting']) else ('stateGood' if 'tracking' in low else 'stateStopped'))
         self.state.setObjectName(name); self.state.style().unpolish(self.state); self.state.style().polish(self.state); self.mode.setText('Auto' if text.upper() in ['TRACKING','SLEWING','PARKING','SERVICING'] else text.title())
         if text.upper() not in ['TRACKING','SLEWING','PARKING','SERVICING','SCAN','YFACTOR','MANUAL'] and not text.upper().startswith('MANUAL '):
             self.set_rates(None,None)
+        if changed: self.state_changed.emit(self.name,text.upper())
     def set_limits_ok(self,ok):
         self.limits.setText('SAFE' if ok else 'FAULT'); self.limits.setObjectName('safe' if ok else 'faultTag'); self.limits.style().unpolish(self.limits); self.limits.style().polish(self.limits)
 class B210Panel(Panel):
@@ -565,6 +568,7 @@ class ScanSettingsDialog(SimpleDialog):
             self.stop_scan(); self.set_status('Scan stop requested; close after scan cleanup finishes.'); return
         self.reject()
     def closeEvent(self,event):
+        self.voice.close()
         if getattr(self.app,'is_scan_running',lambda:False)():
             self.stop_scan(); self.set_status('Scan stop requested; close after scan cleanup finishes.'); event.ignore(); return
         event.accept()
@@ -651,6 +655,7 @@ class WT8App(QWidget):
     def __init__(self,config_path):
         super().__init__(); self.config_path=Path(config_path); self.configs=load_configs(self.config_path); self.site=load_site_config(self.config_path); self.power_config=load_power_config(self.config_path); self.sources=load_sources(self.config_path); self.selected_source_name=self.site.selected_source if self.site.selected_source in self.sources else next(iter(self.sources), '')
         self.event_log=EventLogger(Path('logs'),self.site.log_retention_days,self.site.log_level); self.state_store=AppStateStore(); self.sessions={}; self.positions={}; self.position_rate_state={}; self.cards={}; self.current_target=None; self.card_targets={}; self.tracking_kind=''; self.tracking_stop=threading.Event(); self.tracking_thread=None; self.service_stop=threading.Event(); self.service_active=False; self.park_stop=threading.Event(); self.park_active=False; self.fixed_target_mode=''; self.fixed_target_generation=0; self.tracking_starting=False; self.jog_stops={}; self.manual_axes={}; self.manual_pending={}; self.manual_modes={}; self.b210_stop=threading.Event(); self.b210_thread=None; self.events=queue.Queue(); self.event_history=[]; self.log_handle=None; self.log_writer=None; self.scan_stop=threading.Event(); self.scan_thread=None; self.scan_antenna_name=''; self.scan_axis=None; self.scan_offset_degrees=0.0; self.scan_offset_lock=threading.Lock(); self.scan_result_dialogs=[]; self.yfactor_stop=threading.Event(); self.yfactor_thread=None; self.yfactor_active=False; self.yfactor_hot_label=''; self.peak_stop=threading.Event(); self.peak_thread=None; self.tracking_nominal_az={}; self.tracking_az_comp_force={}; self.modeless_dialogs=[]; self.active_scan_antenna=''; self.active_scan_dialog=None; self.scan_resume_kind=''; self.last_user_activity=time.monotonic(); self.timeout_in_progress=False
+        self.voice=VoiceAnnunciator()
         self.setWindowTitle(f'WT8 — Antenna Control & Tracking {APP_VERSION}'); self.resize(1380,920); self.setMinimumSize(1250,880); self.build_ui(); self.style_ui(); self.set_status('Load config, connect antennas, then use guarded jogs.'); self.event_log.info('APP_START',version=APP_VERSION,config=str(config_path))
         QApplication.instance().installEventFilter(self)
         self.t_ref=QTimer(self); self.t_ref.timeout.connect(self.update_reference); self.t_ref.start(1000); self.t_evt=QTimer(self); self.t_evt.timeout.connect(self.process_events); self.t_evt.start(100); self.t_pos=QTimer(self); self.t_pos.timeout.connect(self.poll_positions); self.t_pos.start(1000)
@@ -664,6 +669,16 @@ class WT8App(QWidget):
         title=lbl(f'WT8 {APP_VERSION} — ANTENNA CONTROL & TRACKING','appTitle'); main.addWidget(title)
         self.overview=lbl('● EAST: Disconnected     ● WEST: Disconnected     |     Source: None     |     Mode: IDLE','overview')
         main.addWidget(self.overview)
+        voice_row=QHBoxLayout(); voice_row.setSpacing(8)
+        voice_row.addWidget(bold('VOICE ANNUNCIATION'))
+        self.voice_mute=QCheckBox('Mute'); self.voice_mute.setChecked(True)
+        self.voice_mute.toggled.connect(lambda checked:self.voice.set_muted(checked))
+        voice_row.addWidget(self.voice_mute)
+        voice_row.addWidget(lbl('Volume'))
+        self.voice_volume=QSlider(Qt.Horizontal); self.voice_volume.setRange(0,100); self.voice_volume.setValue(70); self.voice_volume.setFixedWidth(145)
+        self.voice_volume.valueChanged.connect(self.voice.set_volume); voice_row.addWidget(self.voice_volume)
+        self.voice_test=btn('Test Voice'); self.voice_test.clicked.connect(lambda:self.voice.say('East voice annunciation test',force=True)); voice_row.addWidget(self.voice_test)
+        voice_row.addStretch(1); main.addLayout(voice_row)
         # Two toolbar rows avoid clipped text on smaller Ubuntu displays and HiDPI scaling.
         self.action_buttons={}
         toolbar_primary=QHBoxLayout(); toolbar_primary.setSpacing(6)
@@ -720,7 +735,7 @@ class WT8App(QWidget):
         header.addWidget(src,3); header.addWidget(ref,1); main.addLayout(header)
         self.status=lbl('')
         for name in self.configs:
-            card=AntennaCard(name); card.jog_pressed.connect(self.start_jog); card.jog_released.connect(self.release_jog); card.jog_mode_changed.connect(self.change_manual_mode); card.stop_clicked.connect(self.stop_antenna); self.cards[name]=card; main.addWidget(card)
+            card=AntennaCard(name); card.jog_pressed.connect(self.start_jog); card.jog_released.connect(self.release_jog); card.jog_mode_changed.connect(self.change_manual_mode); card.stop_clicked.connect(self.stop_antenna); card.state_changed.connect(self.announce_antenna_state); self.cards[name]=card; main.addWidget(card)
         self.power=B210Panel(self.power_config); self.power.app=self; self.power.load_active_calibrations(self.config_path,self.power_config); self.power.start_clicked.connect(self.start_b210); self.power.stop_clicked.connect(self.stop_b210); self.power.cal_clicked.connect(self.open_b210_calibration); self.power.log_start_clicked.connect(self.start_b210_log); self.power.log_stop_clicked.connect(self.stop_b210_log)
         self.power_toggle=btn('▸ B210 SDR POWER / CALIBRATION — Show panel'); self.power_toggle.setObjectName('sectionToggle')
         self.power_toggle.clicked.connect(self.toggle_power_panel); main.addWidget(self.power_toggle)
@@ -818,6 +833,8 @@ class WT8App(QWidget):
             self.event_view.verticalScrollBar().setValue(0)
         self.state_store.set_status(msg,SystemRunState.IDLE)
         self.refresh_system_status()
+    def announce_antenna_state(self,name,state):
+        self.voice.say(f'{name} {state.lower()}')
     def refresh_system_status(self):
         if not hasattr(self,'connection_summary'): return
         total=len(self.configs); connected=len(self.sessions)
