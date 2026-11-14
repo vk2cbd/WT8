@@ -43,6 +43,22 @@ class ManualModeTests(unittest.TestCase):
         self.app.refresh_manual_display(name)
     def press(self,d):
         WT8App.start_jog(self.app,'East',d.value)
+    def test_manual_controls_do_not_overlap(self):
+        self.card.resize(1250,270)
+        self.card.show()
+        self.qt.processEvents()
+        controls=[self.card.mode_momentary,self.card.mode_latched,
+                  *self.card.jog_buttons.values()]
+        for i,first in enumerate(controls):
+            for second in controls[i+1:]:
+                a=first.mapTo(self.card,first.rect().topLeft())
+                b=second.mapTo(self.card,second.rect().topLeft())
+                from PyQt5.QtCore import QRect
+                rect_a=QRect(a,first.size())
+                rect_b=QRect(b,second.size())
+                self.assertFalse(rect_a.intersects(rect_b),
+                    f'{first.text()} overlaps {second.text()}')
+        self.card.hide()
     def test_segmented_mode_selector_exclusive(self):
         self.assertTrue(self.card.mode_momentary.isChecked())
         self.card.select_manual_mode('LATCHED')
