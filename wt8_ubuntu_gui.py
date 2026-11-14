@@ -897,6 +897,9 @@ class WT8App(QWidget):
     def refresh_system_status(self):
         if not hasattr(self,'connection_summary'): return
         total=len(self.configs); connected=len(self.sessions)
+        for name,card in self.cards.items():
+            if name in self.configs:
+                card.set_controller_config(self.configs[name])
         self.connection_summary.setText(f'● Antenna controllers: Connected ({connected}/{total})' if connected else '● Antenna controllers: Disconnected')
         for widget,active in ((self.connection_summary,connected>0),(self.tracking_summary,bool(self.tracking_kind)),(self.motion_summary,bool(self.manual_axes or self.park_active or self.service_active))):
             widget.setProperty('active',active)
