@@ -32,7 +32,7 @@ class VoiceTests(unittest.TestCase):
                 output.setframerate(22050)
                 output.writeframes((10000).to_bytes(2, "little", signed=True) * 4)
             silent = VoiceAnnunciator._volume_adjusted_wav(path, 0)
-            self.assertIn(b"\\x00\\x00" * 4, silent)
+            self.assertIn(bytes(8), silent)
             original = VoiceAnnunciator._volume_adjusted_wav(path, 100)
             self.assertIn((10000).to_bytes(2, "little", signed=True) * 4, original)
 
