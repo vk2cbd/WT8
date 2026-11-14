@@ -659,21 +659,46 @@ class WT8App(QWidget):
         title=lbl(f'WT8 {APP_VERSION} — ANTENNA CONTROL & TRACKING','appTitle'); main.addWidget(title)
         self.overview=lbl('● EAST: Disconnected     ● WEST: Disconnected     |     Source: None     |     Mode: IDLE','overview')
         main.addWidget(self.overview)
-        top1=QHBoxLayout(); top1.setSpacing(5)
-        row1=[('● Connect','connectAction',self.connect_all),('⏻ Disconnect','disconnectAction',self.disconnect_all),('⚙ Limits','toolAction',self.open_limits),('◎ Observer','toolAction',self.open_observer),('⌖ Tracking','toolAction',self.open_tracking_dialog),('★ Sources','toolAction',self.open_sources_dialog),('◈ Calibration','toolAction',self.open_calibration_dialog),('⌁ Peak Cal','toolAction',self.open_peak_calibration),('▦ Scan Cal','toolAction',self.open_scan_dialog),('◉ Y Factor','toolAction',self.open_yfactor_dialog),('≡ Encoders','toolAction',self.open_encoders_dialog),('■ STOP ALL','emergencyAction',self.stop_all)]
-        for text,name,cb in row1:
-            b=btn(text,name); b.clicked.connect(cb)
-            icon_name={'connectAction':'SP_DialogApplyButton','disconnectAction':'SP_DialogCancelButton','toolAction':'SP_FileDialogDetailedView','emergencyAction':'SP_MessageBoxCritical'}.get(name)
-            if icon_name: b.setIcon(self.style().standardIcon(getattr(QStyle,icon_name)))
-            top1.addWidget(b)
-        top1.addStretch(1); main.addLayout(top1)
-        top2=QHBoxLayout(); top2.setSpacing(4)
-        row2=[('▶ Track Sun','trackAction',lambda:self.start_tracking('sun')),('▶ Track Moon','trackAction',lambda:self.start_tracking('moon')),('▶ Track Source','trackAction',lambda:self.start_tracking('source')),('■ Stop Track','stopTrackAction',self.stop_tracking),('⚒ Service','serviceAction',self.service_all),('P Park','parkAction',self.park_all)]
-        for text,name,cb in row2:
-            b=btn(text,name); b.clicked.connect(cb)
-            icon_name={'trackAction':'SP_MediaPlay','stopTrackAction':'SP_MediaStop','serviceAction':'SP_FileDialogContentsView','parkAction':'SP_DialogSaveButton'}.get(name)
-            if icon_name: b.setIcon(self.style().standardIcon(getattr(QStyle,icon_name)))
-            top2.addWidget(b)
+        # Two toolbar rows avoid clipped text on smaller Ubuntu displays and HiDPI scaling.
+        toolbar_primary=QHBoxLayout(); toolbar_primary.setSpacing(6)
+        toolbar_tools=QHBoxLayout(); toolbar_tools.setSpacing(6)
+        primary_actions=[
+            ('Connect','connectAction',self.connect_all,'SP_DialogApplyButton'),
+            ('Disconnect','disconnectAction',self.disconnect_all,'SP_DialogCancelButton'),
+            ('Limits','toolAction',self.open_limits,'SP_MessageBoxWarning'),
+            ('Observer','toolAction',self.open_observer,'SP_FileDialogInfoView'),
+            ('Tracking','toolAction',self.open_tracking_dialog,'SP_ComputerIcon'),
+            ('Sources','toolAction',self.open_sources_dialog,'SP_DirIcon'),
+        ]
+        tools_actions=[
+            ('Calibration','toolAction',self.open_calibration_dialog,'SP_DialogApplyButton'),
+            ('Peak Cal','toolAction',self.open_peak_calibration,'SP_ArrowUp'),
+            ('Scan Cal','toolAction',self.open_scan_dialog,'SP_BrowserReload'),
+            ('Y Factor','toolAction',self.open_yfactor_dialog,'SP_FileDialogDetailedView'),
+            ('Encoders','toolAction',self.open_encoders_dialog,'SP_DriveHDIcon'),
+            ('STOP ALL','emergencyAction',self.stop_all,'SP_MessageBoxCritical'),
+        ]
+        for layout,actions in ((toolbar_primary,primary_actions),(toolbar_tools,tools_actions)):
+            for label,style,callback,icon_id in actions:
+                button=btn(label,style); button.clicked.connect(callback)
+                button.setIcon(self.style().standardIcon(getattr(QStyle,icon_id)))
+                button.setMinimumWidth(max(90,button.fontMetrics().horizontalAdvance(label)+48))
+                layout.addWidget(button)
+            layout.addStretch(1); main.addLayout(layout)
+        top2=QHBoxLayout(); top2.setSpacing(6)
+        motion_actions=[
+            ('Track Sun','trackAction',lambda:self.start_tracking('sun'),'SP_MediaPlay'),
+            ('Track Moon','trackAction',lambda:self.start_tracking('moon'),'SP_MediaPlay'),
+            ('Track Source','trackAction',lambda:self.start_tracking('source'),'SP_MediaPlay'),
+            ('Stop Track','stopTrackAction',self.stop_tracking,'SP_MediaStop'),
+            ('Service','serviceAction',self.service_all,'SP_FileDialogContentsView'),
+            ('Park','parkAction',self.park_all,'SP_DialogSaveButton'),
+        ]
+        for label,style,callback,icon_id in motion_actions:
+            button=btn(label,style); button.clicked.connect(callback)
+            button.setIcon(self.style().standardIcon(getattr(QStyle,icon_id)))
+            button.setMinimumWidth(max(92,button.fontMetrics().horizontalAdvance(label)+48))
+            top2.addWidget(button)
         top2.addStretch(1); main.addLayout(top2)
         header=QHBoxLayout(); header.setSpacing(8)
         src=Panel(); sr=QGridLayout(src); sr.setContentsMargins(8,7,8,7); sr.setHorizontalSpacing(12); sr.setVerticalSpacing(6)
