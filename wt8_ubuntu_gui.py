@@ -44,18 +44,30 @@ class Panel(QFrame):
 class AntennaCard(Panel):
     jog_pressed=pyqtSignal(str,str); jog_released=pyqtSignal(str,str); stop_clicked=pyqtSignal(str); jog_mode_changed=pyqtSignal(str,str)
     def __init__(self,name):
-        super().__init__(); self.name=name; self.setMinimumHeight(180); self.setMaximumHeight(220); self.jog_buttons={}
+        super().__init__(); self.name=name; self.setMinimumHeight(178); self.setMaximumHeight(210); self.jog_buttons={}
         g=QGridLayout(self); g.setContentsMargins(10,8,10,8); g.setHorizontalSpacing(10); g.setVerticalSpacing(5)
         title=bold(name.upper()); title.setObjectName('antennaTitle'); title.setMinimumWidth(72); self.state=lbl('DISCONNECTED','stateStopped'); lock_width(self.state,'DISCONNECTED',18)
         self.az=bold('--.--',18); self.el=bold('--.--',18); lock_width(self.az,'359.99',12); lock_width(self.el,'090.00',12)
         self.az_err=lbl('--.--'); self.el_err=lbl('--.--'); lock_width(self.az_err,'+999.99',10); lock_width(self.el_err,'+999.99',10)
         self.limits=lbl('SAFE','safe'); lock_width(self.limits,'FAULT',18); self.mode=lbl('--'); lock_width(self.mode,'Disconnected',10); self.target=lbl('--.-- / --.--'); lock_width(self.target,'359.99 / 090.00',12); self.az_comp=lbl('AZ comp --','muted'); lock_width(self.az_comp,'AZ comp +9.99',10)
         self.az_rate=lbl('AZ rate  --.-- deg/s','muted'); self.el_rate=lbl('EL rate  --.-- deg/s','muted'); lock_width(self.az_rate,'AZ rate  999.99 deg/s',10); lock_width(self.el_rate,'EL rate  999.99 deg/s',10)
-        g.addWidget(title,0,0,1,2); g.addWidget(self.state,0,8,1,2,Qt.AlignRight)
-        g.addWidget(lbl('AZ','muted'),1,0); g.addWidget(self.az,1,1); g.addWidget(lbl('AZ err','muted'),1,3); g.addWidget(self.az_err,1,4); g.addWidget(lbl('Limits','muted'),1,5); g.addWidget(self.limits,1,6)
-        g.addWidget(lbl('EL','muted'),2,0); g.addWidget(self.el,2,1); g.addWidget(lbl('EL err','muted'),2,3); g.addWidget(self.el_err,2,4); g.addWidget(lbl('Mode','muted'),2,5); g.addWidget(self.mode,2,6)
-        g.addWidget(self.az_rate,3,0,1,2); g.addWidget(lbl('Target','muted'),3,3); g.addWidget(self.target,3,4); g.addWidget(self.az_comp,3,5,1,2)
-        g.addWidget(self.el_rate,4,0,1,2)
+        head=QFrame(); head.setObjectName('antennaHeader'); hl=QHBoxLayout(head); hl.setContentsMargins(10,3,10,3)
+        hl.addWidget(title); hl.addStretch(1); hl.addWidget(self.state)
+        g.addWidget(head,0,0,1,3)
+        telemetry=QGridLayout(); telemetry.setContentsMargins(4,4,4,4); telemetry.setHorizontalSpacing(12); telemetry.setVerticalSpacing(6)
+        telemetry.addWidget(lbl('AZ','muted'),0,0); telemetry.addWidget(self.az,0,1)
+        telemetry.addWidget(lbl('Target AZ','muted'),0,2)
+        self.target_az_display=lbl('--.--'); telemetry.addWidget(self.target_az_display,0,3)
+        telemetry.addWidget(lbl('AZ err','muted'),0,4); telemetry.addWidget(self.az_err,0,5)
+        telemetry.addWidget(lbl('Limits','muted'),0,6); telemetry.addWidget(self.limits,0,7)
+        telemetry.addWidget(lbl('EL','muted'),1,0); telemetry.addWidget(self.el,1,1)
+        telemetry.addWidget(lbl('Target EL','muted'),1,2)
+        self.target_el_display=lbl('--.--'); telemetry.addWidget(self.target_el_display,1,3)
+        telemetry.addWidget(lbl('EL err','muted'),1,4); telemetry.addWidget(self.el_err,1,5)
+        telemetry.addWidget(lbl('Mode','muted'),1,6); telemetry.addWidget(self.mode,1,7)
+        telemetry.addWidget(self.az_rate,2,0,1,2); telemetry.addWidget(self.az_comp,2,2,1,2)
+        telemetry.addWidget(self.el_rate,3,0,1,2); telemetry.addWidget(lbl('Target','muted'),3,2); telemetry.addWidget(self.target,3,3,1,2)
+        g.addLayout(telemetry,1,0,1,1)
         c=QWidget(); c.setObjectName('manualPad'); cg=QGridLayout(c); cg.setContentsMargins(0,0,0,0); cg.setHorizontalSpacing(6); cg.setVerticalSpacing(6)
         mode=QHBoxLayout(); mode.addWidget(lbl('Manual','muted'))
         self.manual_selector=QComboBox(); self.manual_selector.addItems(['MOMENTARY','LATCHED'])
@@ -68,9 +80,9 @@ class AntennaCard(Panel):
             self.jog_buttons[direction]=b; cg.addWidget(b,row,col)
         stop=btn('STOP','danger'); stop.setFixedSize(78,30); stop.clicked.connect(lambda:self.stop_clicked.emit(self.name)); cg.addWidget(stop,2,1)
         self.manual_summary=lbl('AZ stopped | EL stopped','muted'); cg.addWidget(self.manual_summary,4,0,1,3)
-        g.addWidget(c,1,7,4,3,Qt.AlignLeft|Qt.AlignVCenter)
-        g.setColumnMinimumWidth(1,self.az.maximumWidth()); g.setColumnMinimumWidth(2,18); g.setColumnMinimumWidth(4,self.az_err.maximumWidth()); g.setColumnMinimumWidth(6,self.limits.maximumWidth())
-        g.setColumnMinimumWidth(7,6); g.setColumnStretch(10,1)
+        cg.setContentsMargins(10,5,10,5)
+        g.addWidget(c,1,1,1,1,Qt.AlignCenter)
+        g.setColumnStretch(0,5); g.setColumnStretch(1,2); g.setColumnStretch(2,1)
     def set_manual_active(self,directions):
         labels={Direction.AZ_CW.value:'E',Direction.AZ_CCW.value:'W',Direction.EL_UP.value:'N',Direction.EL_DOWN.value:'S'}
         for direction,button in self.jog_buttons.items():
@@ -87,8 +99,10 @@ class AntennaCard(Panel):
         self.el_rate.setText('EL rate  --.-- deg/s' if el_rate is None else f'EL rate  {el_rate:0.2f} deg/s')
     def set_target(self,target: Optional[TargetPosition], pos: Optional[Position], az_comp: Optional[float] = None):
         if not target:
+            self.target_az_display.setText('--.--'); self.target_el_display.setText('--.--')
             self.target.setText('--.-- / --.--'); self.az_err.setText('--.--'); self.el_err.setText('--.--'); self.az_comp.setText('AZ comp --'); return
         self.target.setText(f'{target.azimuth:06.2f} / {target.elevation:05.2f}')
+        self.target_az_display.setText(f'{target.azimuth:06.2f}'); self.target_el_display.setText(f'{target.elevation:05.2f}')
         if az_comp is None: self.az_comp.setText('AZ comp --')
         else: self.az_comp.setText(f'AZ comp {az_comp:+0.2f}' if abs(az_comp) >= 0.005 else 'AZ comp none')
         if pos: self.az_err.setText(f'{shortest_angle_delta(pos.azimuth,target.azimuth):+0.2f}'); self.el_err.setText(f'{target.elevation-pos.elevation:+0.2f}')
@@ -654,7 +668,10 @@ class WT8App(QWidget):
             QLabel{background:transparent;border:none;color:#1f252b}
             QLabel#muted{color:#8a8f95}
             QLabel#appTitle{background:#205487;color:white;font-size:16pt;font-weight:bold;padding:10px 14px;border-radius:6px}
-            QLabel#antennaTitle{color:#205487;font-size:12pt;font-weight:bold}
+            QLabel#antennaTitle{color:white;font-size:12pt;font-weight:bold}
+            QFrame#antennaHeader{background:#205487;border-radius:4px}
+            QFrame#antennaHeader QLabel{color:white}
+            QWidget#manualPad{background:#eaf2fc;border:1px solid #c7d8ee;border-radius:6px}
             QLabel#bold{font-weight:700}
             QFrame#panel{background:#f9fbff;border:1px solid #c5d7ea;border-radius:7px}
             QPushButton{background:#fff;color:#111820;border:1px solid #cfd3d6;border-radius:8px;padding:4px 10px;min-height:20px;min-width:62px}
