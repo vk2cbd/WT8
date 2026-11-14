@@ -876,10 +876,10 @@ class WT8App(QWidget):
             target=TargetPosition(mode,az,el)
             self.card_targets[name]=target
             self.cards[name].set_target(target,self.positions.get(name),None)
-        if len(sessions)==1:
-            name,session=sessions[0]
-            self.source_az.setText(f'{getattr(session.config,mode.lower()+"_az"):06.2f}')
-            self.source_el.setText(f'{getattr(session.config,mode.lower()+"_el"):06.2f}')
+        az_values=[getattr(session.config,mode.lower()+'_az') for _,session in sessions]
+        el_values=[getattr(session.config,mode.lower()+'_el') for _,session in sessions]
+        self.source_az.setText(f'{az_values[0]:06.2f}' if all(abs(v-az_values[0])<0.005 for v in az_values) else 'Varies')
+        self.source_el.setText(f'{el_values[0]:06.2f}' if all(abs(v-el_values[0])<0.005 for v in el_values) else 'Varies')
     def clear_fixed_target_display(self):
         if not self.fixed_target_mode:
             return
@@ -951,6 +951,7 @@ class WT8App(QWidget):
                         self.emit(lambda msg:self.set_status(msg),'Service cancelled: tracking did not stop.')
                         return
                 if stop.is_set(): return
+                self.emit(lambda _unused:[self.fixed_move_state('Service','moving',token,n) for n,_s in sessions],None)
                 def move_one(name,session):
                     try:
                         if stop.is_set(): return
@@ -1015,6 +1016,7 @@ class WT8App(QWidget):
                         self.emit(lambda msg:self.set_status(msg),'Park cancelled: tracking did not stop.')
                         return
                 if stop.is_set(): return
+                self.emit(lambda _unused:[self.fixed_move_state('Park','moving',token,n) for n,_s in sessions],None)
                 def park_one(name,session):
                     try:
                         if stop.is_set(): return
