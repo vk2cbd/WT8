@@ -98,9 +98,8 @@ class AntennaCard(Panel):
         for panel,stretch in ((current,3),(target_panel,3),(controller,4)):
             telemetry.addWidget(panel,stretch)
         g.addLayout(telemetry,1,0,1,1,Qt.AlignVCenter)
-        c=QWidget(); c.setObjectName('manualPad'); c.setMinimumWidth(360)
-        cg=QGridLayout(c); cg.setContentsMargins(12,10,12,10); cg.setHorizontalSpacing(8); cg.setVerticalSpacing(6)
-        heading=bold('MANUAL CONTROL'); cg.addWidget(heading,0,0,1,3,Qt.AlignLeft)
+        c=QWidget(); c.setObjectName('manualPad'); c.setMinimumWidth(336)
+        cg=QGridLayout(c); cg.setContentsMargins(8,5,8,5); cg.setHorizontalSpacing(6); cg.setVerticalSpacing(3)
         mode=QHBoxLayout(); mode.setSpacing(6)
         self.manual_selector=QComboBox(); self.manual_selector.addItems(['MOMENTARY','LATCHED']); self.manual_selector.hide()
         self.mode_momentary=btn('Momentary','modeSegment'); self.mode_latched=btn('Latched','modeSegment')
@@ -111,15 +110,13 @@ class AntennaCard(Panel):
         self.manual_selector.currentTextChanged.connect(lambda value:self.jog_mode_changed.emit(self.name,value))
         self.manual_selector.currentTextChanged.connect(self.update_manual_mode_display)
         mode.addStretch(1); mode.addWidget(self.mode_momentary); mode.addWidget(self.mode_latched); mode.addStretch(1)
-        cg.addLayout(mode,1,0,1,3)
-        for text,direction,row,col in [('EL+',Direction.EL_UP.value,2,1),('AZ-',Direction.AZ_CCW.value,3,0),('AZ+',Direction.AZ_CW.value,3,2),('EL-',Direction.EL_DOWN.value,4,1)]:
+        cg.addLayout(mode,0,0,1,3)
+        for text,direction,row,col in [('EL+',Direction.EL_UP.value,1,1),('AZ-',Direction.AZ_CCW.value,2,0),('AZ+',Direction.AZ_CW.value,2,2),('EL-',Direction.EL_DOWN.value,3,1)]:
             b=btn(text); b.setObjectName('jogButton'); b.setFixedSize(100,34); b.setAutoRepeat(False)
             b.pressed.connect(lambda d=direction:self.jog_pressed.emit(self.name,d))
             b.released.connect(lambda d=direction:self.jog_released.emit(self.name,d))
             self.jog_buttons[direction]=b; cg.addWidget(b,row,col)
-        stop=btn('STOP','manualStop'); stop.setFixedSize(100,34); stop.clicked.connect(lambda:self.stop_clicked.emit(self.name)); cg.addWidget(stop,3,1)
-        self.manual_summary=lbl('● AZ: stopped    ● EL: stopped','manualSummary'); cg.addWidget(self.manual_summary,5,0,1,3)
-        self.manual_hint=lbl('Hold a direction button to move','muted'); cg.addWidget(self.manual_hint,6,0,1,3)
+        stop=btn('STOP','manualStop'); stop.setFixedSize(100,34); stop.clicked.connect(lambda:self.stop_clicked.emit(self.name)); cg.addWidget(stop,2,1)
         cg.setColumnMinimumWidth(0,100); cg.setColumnMinimumWidth(1,100); cg.setColumnMinimumWidth(2,100)
         g.addWidget(c,1,1,1,1,Qt.AlignCenter)
         g.setColumnStretch(0,5); g.setColumnStretch(1,0); g.setColumnStretch(2,0)
@@ -135,17 +132,11 @@ class AntennaCard(Panel):
     def update_manual_mode_display(self,value):
         self.mode_momentary.setChecked(value=='MOMENTARY')
         self.mode_latched.setChecked(value=='LATCHED')
-        self.manual_hint.setText('Click active direction again to stop' if value=='LATCHED' else 'Hold a direction button to move')
     def set_manual_active(self,directions):
         labels={Direction.AZ_CW.value:'E',Direction.AZ_CCW.value:'W',Direction.EL_UP.value:'N',Direction.EL_DOWN.value:'S'}
         for direction,button in self.jog_buttons.items():
             button.setProperty('jogActive',direction in directions)
             button.style().unpolish(button); button.style().polish(button)
-        az=next((labels[d] for d in directions if d in (Direction.AZ_CW.value,Direction.AZ_CCW.value)),'stopped')
-        el=next((labels[d] for d in directions if d in (Direction.EL_UP.value,Direction.EL_DOWN.value)),'stopped')
-        self.manual_summary.setText(f'● AZ: {az}    ● EL: {el}')
-        self.manual_summary.setProperty('moving',bool(directions))
-        self.manual_summary.style().unpolish(self.manual_summary); self.manual_summary.style().polish(self.manual_summary)
         if directions and self.state.text()!='FAULT': self.set_state('MANUAL '+ ' + '.join(labels[d] for d in directions))
     def set_position(self,pos: Optional[Position]):
         self.az.setText('--.--' if pos is None else f'{pos.azimuth:06.2f}'); self.el.setText('--.--' if pos is None else f'{pos.elevation:05.2f}')
