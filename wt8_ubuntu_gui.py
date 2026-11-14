@@ -801,10 +801,18 @@ class WT8App(QWidget):
         self.power_toggle.clicked.connect(self.toggle_power_panel); main.addWidget(self.power_toggle)
         main.addWidget(self.power); self.power.hide()
         bottom=QHBoxLayout(); bottom.setSpacing(8)
-        ev=Panel(); ev.setMinimumHeight(130); eg=QGridLayout(ev); eg.setContentsMargins(9,8,9,8)
+        event_column=QWidget(); event_layout=QVBoxLayout(event_column)
+        event_layout.setContentsMargins(0,0,0,0); event_layout.setSpacing(5)
+        self.event_toggle=btn('▸ EVENT LOG — Show panel'); self.event_toggle.setObjectName('sectionToggle')
+        self.event_toggle.clicked.connect(self.toggle_event_panel)
+        event_layout.addWidget(self.event_toggle)
+        self.event_panel=Panel(); self.event_panel.setMinimumHeight(130)
+        eg=QGridLayout(self.event_panel); eg.setContentsMargins(9,8,9,8)
         eg.addWidget(bold('▤ EVENT LOG'),0,0); ob=btn('Open Log'); ob.clicked.connect(self.open_log_hint); eg.addWidget(ob,0,3,Qt.AlignRight)
         self.event_view=QPlainTextEdit(); self.event_view.setReadOnly(True); self.event_view.setObjectName('eventView'); self.event_view.setMinimumHeight(82)
-        eg.addWidget(self.event_view,1,0,1,4); bottom.addWidget(ev,3)
+        eg.addWidget(self.event_view,1,0,1,4)
+        event_layout.addWidget(self.event_panel); self.event_panel.hide()
+        event_layout.addStretch(1); bottom.addWidget(event_column,3)
         status_panel=Panel(); sg=QVBoxLayout(status_panel); sg.setContentsMargins(12,9,12,9); sg.setSpacing(7)
         sg.addWidget(bold('● SYSTEM STATUS'))
         self.connection_summary=lbl('● Antenna controllers: Disconnected','systemIndicator')
@@ -819,6 +827,10 @@ class WT8App(QWidget):
         visible=not self.power.isVisible()
         self.power.setVisible(visible)
         self.power_toggle.setText('▾ B210 SDR POWER / CALIBRATION — Hide panel' if visible else '▸ B210 SDR POWER / CALIBRATION — Show panel')
+    def toggle_event_panel(self):
+        visible=not self.event_panel.isVisible()
+        self.event_panel.setVisible(visible)
+        self.event_toggle.setText('▾ EVENT LOG — Hide panel' if visible else '▸ EVENT LOG — Show panel')
     def style_ui(self):
         # Palette and hierarchy intentionally mirror the approved dashboard mockup.
         self.setStyleSheet("""
