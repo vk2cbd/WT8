@@ -44,7 +44,7 @@ class Panel(QFrame):
 class AntennaCard(Panel):
     jog_pressed=pyqtSignal(str,str); jog_released=pyqtSignal(str,str); stop_clicked=pyqtSignal(str); jog_mode_changed=pyqtSignal(str,str)
     def __init__(self,name):
-        super().__init__(); self.name=name; self.setMinimumHeight(246); self.setMaximumHeight(310); self.jog_buttons={}
+        super().__init__(); self.name=name; self.setMinimumHeight(210); self.setMaximumHeight(280); self.jog_buttons={}
         g=QGridLayout(self); g.setContentsMargins(7,6,7,6); g.setHorizontalSpacing(10); g.setVerticalSpacing(5)
         title=bold(name.upper()); title.setObjectName('antennaTitle'); title.setMinimumWidth(72); self.state=lbl('DISCONNECTED','stateStopped'); lock_width(self.state,'DISCONNECTED',18)
         self.az=bold('--.--',18); self.el=bold('--.--',18); lock_width(self.az,'359.99',12); lock_width(self.el,'090.00',12)
@@ -74,8 +74,8 @@ class AntennaCard(Panel):
         self.mode_momentary=btn('Momentary','modeSegment'); self.mode_latched=btn('Latched','modeSegment')
         self.mode_momentary.setCheckable(True); self.mode_latched.setCheckable(True)
         self.mode_momentary.setChecked(True)
-        self.mode_momentary.clicked.connect(lambda:self.manual_selector.setCurrentText('MOMENTARY'))
-        self.mode_latched.clicked.connect(lambda:self.manual_selector.setCurrentText('LATCHED'))
+        self.mode_momentary.clicked.connect(lambda:self.select_manual_mode('MOMENTARY'))
+        self.mode_latched.clicked.connect(lambda:self.select_manual_mode('LATCHED'))
         self.manual_selector.currentTextChanged.connect(lambda value:self.jog_mode_changed.emit(self.name,value))
         self.manual_selector.currentTextChanged.connect(self.update_manual_mode_display)
         mode.addWidget(self.mode_momentary); mode.addWidget(self.mode_latched)
@@ -91,6 +91,10 @@ class AntennaCard(Panel):
         cg.setContentsMargins(12,8,12,8)
         g.addWidget(c,1,1,1,1,Qt.AlignCenter)
         g.setColumnStretch(0,5); g.setColumnStretch(1,3); g.setColumnStretch(2,0)
+        g.setRowStretch(0,0); g.setRowStretch(1,1)
+    def select_manual_mode(self,value):
+        self.manual_selector.setCurrentText(value)
+        self.update_manual_mode_display(value)
     def update_manual_mode_display(self,value):
         self.mode_momentary.setChecked(value=='MOMENTARY')
         self.mode_latched.setChecked(value=='LATCHED')
