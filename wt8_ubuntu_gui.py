@@ -82,7 +82,7 @@ class AntennaCard(Panel):
         self.manual_selector.currentTextChanged.connect(self.update_manual_mode_display)
         mode.addStretch(1); mode.addWidget(self.mode_momentary); mode.addWidget(self.mode_latched); mode.addStretch(1)
         cg.addLayout(mode,1,0,1,3)
-        for text,direction,row,col in [('N / EL+',Direction.EL_UP.value,2,1),('W / AZ-',Direction.AZ_CCW.value,3,0),('E / AZ+',Direction.AZ_CW.value,3,2),('S / EL-',Direction.EL_DOWN.value,4,1)]:
+        for text,direction,row,col in [('EL+',Direction.EL_UP.value,2,1),('AZ-',Direction.AZ_CCW.value,3,0),('AZ+',Direction.AZ_CW.value,3,2),('EL-',Direction.EL_DOWN.value,4,1)]:
             b=btn(text); b.setObjectName('jogButton'); b.setFixedSize(100,34); b.setAutoRepeat(False)
             b.pressed.connect(lambda d=direction:self.jog_pressed.emit(self.name,d))
             b.released.connect(lambda d=direction:self.jog_released.emit(self.name,d))
@@ -665,6 +665,7 @@ class WT8App(QWidget):
         self.overview=lbl('● EAST: Disconnected     ● WEST: Disconnected     |     Source: None     |     Mode: IDLE','overview')
         main.addWidget(self.overview)
         # Two toolbar rows avoid clipped text on smaller Ubuntu displays and HiDPI scaling.
+        self.action_buttons={}
         toolbar_primary=QHBoxLayout(); toolbar_primary.setSpacing(6)
         toolbar_tools=QHBoxLayout(); toolbar_tools.setSpacing(6)
         primary_actions=[
@@ -686,6 +687,7 @@ class WT8App(QWidget):
         for layout,actions in ((toolbar_primary,primary_actions),(toolbar_tools,tools_actions)):
             for label,style,callback,icon_id in actions:
                 button=btn(label,style); button.clicked.connect(callback)
+                self.action_buttons[label]=button
                 button.setIcon(self.style().standardIcon(getattr(QStyle,icon_id)))
                 button.setMinimumWidth(max(90,button.fontMetrics().horizontalAdvance(label)+48))
                 layout.addWidget(button)
@@ -701,6 +703,7 @@ class WT8App(QWidget):
         ]
         for label,style,callback,icon_id in motion_actions:
             button=btn(label,style); button.clicked.connect(callback)
+            self.action_buttons[label]=button
             button.setIcon(self.style().standardIcon(getattr(QStyle,icon_id)))
             button.setMinimumWidth(max(92,button.fontMetrics().horizontalAdvance(label)+48))
             top2.addWidget(button)
@@ -781,6 +784,14 @@ class WT8App(QWidget):
             QPushButton#jogButton{background:#f7fbff;color:#22517e;border:1px solid #8bb6e0;font-weight:bold}
             QPushButton#jogButton[jogActive="true"]{background:#1879dc;color:white;border:2px solid #0757a7}
             QPushButton#sectionToggle{text-align:left;background:#dfeaf7;color:#205487;font-weight:bold;border-radius:5px;min-height:19px;padding:4px 10px}
+            QPushButton#connectAction:pressed,QPushButton#connectAction[actionActive="true"]{background:#096b35;color:white;border:2px solid #054d25}
+            QPushButton#disconnectAction:pressed{background:#182b41;color:white;border:2px solid #101d2c}
+            QPushButton#toolAction:pressed{background:#166db8;color:white;border:2px solid #0b4c8a}
+            QPushButton#trackAction:pressed,QPushButton#trackAction[actionActive="true"]{background:#086d36;color:white;border:2px solid #044a23}
+            QPushButton#stopTrackAction:pressed{background:#172637;color:white;border:2px solid #0a1624}
+            QPushButton#serviceAction:pressed,QPushButton#serviceAction[actionActive="true"]{background:#394555;color:white;border:2px solid #1d2938}
+            QPushButton#parkAction:pressed,QPushButton#parkAction[actionActive="true"]{background:#104a94;color:white;border:2px solid #092f64}
+            QPushButton#emergencyAction:pressed{background:#861320;color:white;border:2px solid #5c0912}
             QPushButton#modeSegment{background:#d8e6f5;color:#24517c;border:1px solid #a8c6e4;border-radius:4px;min-width:69px;padding:4px 5px}
             QPushButton#modeSegment:checked{background:#1c70c2;color:white;border:1px solid #145394}
             QLineEdit{background:white;color:#152f49;border:1px solid #c3d3e4;border-radius:5px;padding:4px 7px}
@@ -820,6 +831,18 @@ class WT8App(QWidget):
         fixed='Parking' if self.park_active else ('Servicing' if self.service_active else '')
         self.motion_summary.setText('● Motion: '+(fixed or manual or 'Stopped'))
         self.status_summary.setText(self.status.text())
+        if hasattr(self,'action_buttons'):
+            active_actions={'Connect':bool(self.sessions),
+                            'Track Sun':self.tracking_kind=='sun',
+                            'Track Moon':self.tracking_kind=='moon',
+                            'Track Source':self.tracking_kind=='source',
+                            'Service':self.service_active,
+                            'Park':self.park_active}
+            for label,button in self.action_buttons.items():
+                active=active_actions.get(label,False)
+                if button.property('actionActive')!=active:
+                    button.setProperty('actionActive',active)
+                    button.style().unpolish(button); button.style().polish(button)
         if hasattr(self,'overview'):
             states='     '.join(f'● {name.upper()}: '+('Connected' if name in self.sessions else 'Disconnected') for name in self.cards)
             mode=fixed or ('MANUAL' if manual else ('TRACKING' if self.tracking_kind else 'IDLE'))
