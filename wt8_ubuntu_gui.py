@@ -79,7 +79,7 @@ class AntennaCard(Panel):
         az=next((labels[d] for d in directions if d in (Direction.AZ_CW.value,Direction.AZ_CCW.value)),'stopped')
         el=next((labels[d] for d in directions if d in (Direction.EL_UP.value,Direction.EL_DOWN.value)),'stopped')
         self.manual_summary.setText(f'AZ {az} | EL {el}')
-        if directions: self.set_state('MANUAL '+ ' + '.join(labels[d] for d in directions))
+        if directions and self.state.text()!='FAULT': self.set_state('MANUAL '+ ' + '.join(labels[d] for d in directions))
     def set_position(self,pos: Optional[Position]):
         self.az.setText('--.--' if pos is None else f'{pos.azimuth:06.2f}'); self.el.setText('--.--' if pos is None else f'{pos.elevation:05.2f}')
     def set_rates(self,az_rate: Optional[float], el_rate: Optional[float]):
@@ -791,6 +791,7 @@ class WT8App(QWidget):
             key=(name,self.manual_axis(direction))
             entry=self.manual_axes.get(key)
             if entry and entry['direction']==direction: self.stop_manual_axis(name,key[1])
+            elif self.manual_pending.get(key)==direction: self.manual_pending.pop(key,None)
     def start_jog(self,name,direction_text):
         if self.service_active or self.park_active or self.tracking_kind or self.tracking_starting:
             self.set_status('Manual jog rejected: automatic motion active.'); return
@@ -836,6 +837,7 @@ class WT8App(QWidget):
             if pending and name in self.sessions and not self.park_active and not self.service_active and not self.tracking_kind:
                 self.launch_manual_axis(name,axis,pending,self.sessions[name])
         self.refresh_manual_display(name)
+        if error: self.cards[name].set_state('FAULT')
     def refresh_manual_display(self,name):
         card=self.cards.get(name)
         if not card: return
