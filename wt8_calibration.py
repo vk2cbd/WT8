@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Calibration maths for WT7."""
+"""Calibration maths for WT8."""
 
 from __future__ import annotations
 

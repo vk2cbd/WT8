@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tracking target helpers for WT7."""
+"""Tracking target helpers for WT8."""
 
 from __future__ import annotations
 
@@ -7,9 +7,9 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional
 
-from wt7_astro import TargetPosition, local_sidereal_time, moon_position, source_position
-from wt7_config import SiteConfig, SourceConfig
-from wt7_solar import sun_position
+from wt8_astro import TargetPosition, local_sidereal_time, moon_position, source_position
+from wt8_config import SiteConfig, SourceConfig
+from wt8_solar import sun_position
 
 
 @dataclass(frozen=True)

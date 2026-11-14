@@ -11,11 +11,11 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QApplication
 
-from wt7_antenna import Axis, Position
-from wt7_astro import TargetPosition
-from wt7_config import ScanConfig
-from wt7_b210_power import B210PowerReading
-from wt7_ubuntu_gui import WT7App
+from wt8_antenna import Axis, Position
+from wt8_astro import TargetPosition
+from wt8_config import ScanConfig
+from wt8_b210_power import B210PowerReading
+from wt8_ubuntu_gui import WT8App
 
 
 class _FakeLimits:
@@ -59,7 +59,7 @@ dec_degrees = -80.0
         tmp = tempfile.TemporaryDirectory()
         path = Path(tmp.name) / "wt7.ini"
         path.write_text(content.strip(), encoding="utf-8")
-        app = WT7App(path)
+        app = WT8App(path)
         self.addCleanup(app.close)
         self.addCleanup(tmp.cleanup)
         return app

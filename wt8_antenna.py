@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-WT7 hardware driver and safety model.
+WT8 hardware driver and safety model.
 
 This file contains the decoded WinTrak Arduino protocol plus calibration and
 software-limit helpers used by the GUI.
@@ -145,6 +145,8 @@ class AntennaConfig:
     az_low_to_high_compensation: float = 0.0
     park_az: float = 355.0
     park_el: float = 80.0
+    service_az: float = 0.0
+    service_el: float = 5.0
     calibration: Calibration = None
     limits: SafetyLimits = None
 
@@ -357,7 +359,7 @@ class WinTrakController:
         for row in range(8):
             self.oled_write(0xF0, 0, row, "", width=8)
             self.oled_write(0xF0, 8, row, "", width=8)
-        self.oled_write(0xF0, 0, 0, "WT7", width=8)
+        self.oled_write(0xF0, 0, 0, "WT8", width=8)
         self.oled_write(0xF0, 0, 2, label.upper(), width=8)
         self.oled_write(0xF0, 0, 4, "CONNECTED", width=9)
 

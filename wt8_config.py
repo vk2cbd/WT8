@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Configuration helpers for WT7."""
+"""Configuration helpers for WT8."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Union
 
-from wt7_antenna import AntennaConfig, Calibration, SafetyLimits
+from wt8_antenna import AntennaConfig, Calibration, SafetyLimits
 
 
 @dataclass
@@ -477,6 +477,8 @@ def load_configs(path: Union[str, Path]) -> dict[str, AntennaConfig]:
             az_low_to_high_compensation=parser.getfloat(section, "az_low_to_high_compensation", fallback=0.0),
             park_az=parser.getfloat(section, "park_az", fallback=355.0),
             park_el=parser.getfloat(section, "park_el", fallback=80.0),
+            service_az=parser.getfloat(section, "service_az", fallback=0.0),
+            service_el=parser.getfloat(section, "service_el", fallback=5.0),
             calibration=Calibration(
                 az_offset=parser.getfloat(section, "az_offset", fallback=0.0),
                 el_offset=parser.getfloat(section, "el_offset", fallback=0.0),
@@ -517,6 +519,8 @@ def save_configs(path: Union[str, Path], configs: dict[str, AntennaConfig]) -> N
             "az_low_to_high_compensation": f"{config.az_low_to_high_compensation:.3f}",
             "park_az": f"{config.park_az:.3f}",
             "park_el": f"{config.park_el:.3f}",
+            "service_az": f"{config.service_az:.3f}",
+            "service_el": f"{config.service_el:.3f}",
             "az_offset": f"{config.calibration.az_offset:.6f}",
             "el_offset": f"{config.calibration.el_offset:.6f}",
             "az_min": f"{config.limits.az_min:.3f}",

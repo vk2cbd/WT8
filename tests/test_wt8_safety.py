@@ -3,7 +3,7 @@ import threading
 
 from types import SimpleNamespace
 
-from wt7_antenna import Direction, SafeAntenna, SafetyError, SafetyLimits, WinTrakController, WinTrakProtocolError
+from wt8_antenna import Direction, SafeAntenna, SafetyError, SafetyLimits, WinTrakController, WinTrakProtocolError
 
 
 class SafetyLimitTests(unittest.TestCase):
@@ -47,7 +47,7 @@ class SafetyLimitTests(unittest.TestCase):
 
         self.assertEqual(len(writes), 19)
         self.assertTrue(all(width is None or width <= 9 for _prefix, _column, _row, _text, width in writes))
-        self.assertIn((0xF0, 0, 0, "WT7", 8), writes)
+        self.assertIn((0xF0, 0, 0, "WT8", 8), writes)
         self.assertIn((0xF0, 0, 2, "EAST", 8), writes)
         self.assertIn((0xF0, 0, 4, "CONNECTED", 9), writes)
 

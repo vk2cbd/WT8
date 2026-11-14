@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""WT7 two-antenna safety/calibration GUI."""
+"""WT8 two-antenna safety/calibration GUI."""
 
 from __future__ import annotations
 
@@ -15,8 +15,8 @@ from pathlib import Path
 from tkinter import messagebox, ttk
 from typing import Callable, Optional
 
-from wt7_astro import TargetPosition, local_sidereal_time, moon_equatorial, moon_position, source_position
-from wt7_config import (
+from wt8_astro import TargetPosition, local_sidereal_time, moon_equatorial, moon_position, source_position
+from wt8_config import (
     B210Calibration,
     B210_CAL_LEVELS_DBM,
     PowerConfig,
@@ -40,11 +40,11 @@ from wt7_config import (
     save_sources,
     save_yfactor_config,
 )
-from wt7_antenna import AntennaConfig, Axis, Direction, EncoderInfo, Position, SafeAntenna, SafetyError, shortest_angle_delta
-from wt7_logging import EventLogger
-from wt7_b210_power import B210PowerMeter, B210PowerMeterConfig, B210PowerReading
-from wt7_solar import sun_equatorial, sun_position
-from wt7_state import AppStateStore, AntennaRunState, PowerRunState, SystemRunState, antenna_state_from_text
+from wt8_antenna import AntennaConfig, Axis, Direction, EncoderInfo, Position, SafeAntenna, SafetyError, shortest_angle_delta
+from wt8_logging import EventLogger
+from wt8_b210_power import B210PowerMeter, B210PowerMeterConfig, B210PowerReading
+from wt8_solar import sun_equatorial, sun_position
+from wt8_state import AppStateStore, AntennaRunState, PowerRunState, SystemRunState, antenna_state_from_text
 
 
 APP_VERSION = "v0.8"
@@ -55,7 +55,7 @@ def axis_label(axis: Axis) -> str:
 
 
 class LimitsDialog(tk.Toplevel):
-    def __init__(self, app: "WT7App") -> None:
+    def __init__(self, app: "WT8App") -> None:
         super().__init__(app)
         self.app = app
         self.title("Antenna Limits")
@@ -224,7 +224,7 @@ class LimitsDialog(tk.Toplevel):
 
 
 class ObserverDialog(tk.Toplevel):
-    def __init__(self, app: "WT7App") -> None:
+    def __init__(self, app: "WT8App") -> None:
         super().__init__(app)
         self.app = app
         self.title("Observer")
@@ -281,7 +281,7 @@ class ObserverDialog(tk.Toplevel):
 
 
 class SourcesDialog(tk.Toplevel):
-    def __init__(self, app: "WT7App") -> None:
+    def __init__(self, app: "WT8App") -> None:
         super().__init__(app)
         self.app = app
         self.title("Sources")
@@ -454,7 +454,7 @@ class SourcesDialog(tk.Toplevel):
 
 
 class CalibrationDialog(tk.Toplevel):
-    def __init__(self, app: "WT7App") -> None:
+    def __init__(self, app: "WT8App") -> None:
         super().__init__(app)
         self.app = app
         self.closed = False
@@ -688,7 +688,7 @@ class CalibrationDialog(tk.Toplevel):
 class PeakCalibrationDialog(tk.Toplevel):
     SOURCE_LABELS = ("Sun", "Moon", "Selected Source")
 
-    def __init__(self, app: "WT7App") -> None:
+    def __init__(self, app: "WT8App") -> None:
         super().__init__(app)
         self.app = app
         self.title("Peak Calibration")
@@ -1076,7 +1076,7 @@ class EncodersDialog(tk.Toplevel):
         "Mode",
     )
 
-    def __init__(self, app: "WT7App") -> None:
+    def __init__(self, app: "WT8App") -> None:
         super().__init__(app)
         self.app = app
         self.title("Encoders")
@@ -1173,7 +1173,7 @@ class EncodersDialog(tk.Toplevel):
         if not messagebox.askyesno(
             "Set Encoder Position",
             f"Set {name} {axis_label} Arduino position to {position:0.2f}?\n\n"
-            "This resets the WT7 software calibration offset for this axis to zero.",
+            "This resets the WT8 software calibration offset for this axis to zero.",
             parent=self,
         ):
             return
@@ -1200,7 +1200,7 @@ class EncodersDialog(tk.Toplevel):
 
 
 class TrackingDialog(tk.Toplevel):
-    def __init__(self, app: "WT7App") -> None:
+    def __init__(self, app: "WT8App") -> None:
         super().__init__(app)
         self.app = app
         self.title("Tracking")
@@ -1395,7 +1395,7 @@ class TrackingDialog(tk.Toplevel):
 
 
 class AntennaPanel(ttk.Frame):
-    def __init__(self, master: tk.Misc, app: "WT7App", name: str, config: Optional[AntennaConfig] = None) -> None:
+    def __init__(self, master: tk.Misc, app: "WT8App", name: str, config: Optional[AntennaConfig] = None) -> None:
         super().__init__(master, padding=8, relief="solid", borderwidth=1)
         self.app = app
         self.name = name
@@ -1681,7 +1681,7 @@ class AntennaPanel(ttk.Frame):
             self.app.run_worker(lambda: self.session.stop_all(), lambda _result: None, self.set_fault)
 
 class PowerMeterPanel(ttk.Frame):
-    def __init__(self, master: tk.Misc, app: "WT7App") -> None:
+    def __init__(self, master: tk.Misc, app: "WT8App") -> None:
         super().__init__(master, padding=8, relief="solid", borderwidth=1)
         self.app = app
         self.stop_event = threading.Event()
@@ -1895,7 +1895,7 @@ class PowerMeterPanel(ttk.Frame):
             self.log_status_var.set(message)
             return
         timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-        self.log_path = Path(f"wt7_power_{timestamp}.csv")
+        self.log_path = Path(f"wt8_power_{timestamp}.csv")
         self.log_handle = self.log_path.open("w", newline="", encoding="utf-8")
         self.log_writer = csv.writer(self.log_handle)
         self.log_writer.writerow(self.log_header())
@@ -2005,7 +2005,7 @@ class PowerMeterPanel(ttk.Frame):
         self.stop_event.clear()
         self.power_started_at = 0.0
         self.status_var.set("Starting B210...")
-        self.owner_var.set("WT7 owns B210 while SDR power is on")
+        self.owner_var.set("WT8 owns B210 while SDR power is on")
         self.app.state_store.set_power(PowerRunState.STARTING, message="Starting B210")
         self.active_meter_config = meter_config
         self.thread = threading.Thread(target=self.power_loop, args=(meter_config,), name="B210PowerMeter", daemon=True)
@@ -2237,7 +2237,7 @@ class PowerMeterPanel(ttk.Frame):
 class B210CalibrationDialog(tk.Toplevel):
     LEVELS_DBM = B210_CAL_LEVELS_DBM
 
-    def __init__(self, app: "WT7App") -> None:
+    def __init__(self, app: "WT8App") -> None:
         super().__init__(app)
         self.app = app
         self.title("B210 Calibration")
@@ -2401,7 +2401,7 @@ class B210CalibrationDialog(tk.Toplevel):
 
 
 class ScanCalibrationDialog(tk.Toplevel):
-    def __init__(self, app: "WT7App") -> None:
+    def __init__(self, app: "WT8App") -> None:
         super().__init__(app)
         self.app = app
         self.title("Scan Calibration")
@@ -2486,7 +2486,7 @@ class ScanCalibrationDialog(tk.Toplevel):
 class ScanGraphDialog(tk.Toplevel):
     def __init__(
         self,
-        app: "WT7App",
+        app: "WT8App",
         axis: Axis,
         rows: list[dict[str, object]],
         csv_path: Path,
@@ -2734,7 +2734,7 @@ class ScanGraphDialog(tk.Toplevel):
 
 
 class YFactorDialog(tk.Toplevel):
-    def __init__(self, app: "WT7App") -> None:
+    def __init__(self, app: "WT8App") -> None:
         super().__init__(app)
         self.app = app
         self.title("Y Factor")
@@ -2862,10 +2862,10 @@ class YFactorDialog(tk.Toplevel):
         self.destroy()
 
 
-class WT7App(tk.Tk):
+class WT8App(tk.Tk):
     def __init__(self, config_path: str) -> None:
         super().__init__()
-        self.title(f"WT7 Antenna Controller {APP_VERSION}")
+        self.title(f"WT8 Antenna Controller {APP_VERSION}")
         self.geometry("1192x697")
         self.minsize(1080, 650)
         self.config_path = config_path
@@ -2998,7 +2998,7 @@ class WT7App(tk.Tk):
         self.power_panel = PowerMeterPanel(body, self)
         self.power_panel.grid(row=1, column=0, columnspan=2, sticky="ew", padx=4, pady=(2, 0))
         if not self.configs:
-            self.status_var.set(f"No antennas found in {config_path}. Copy wt7_ubuntu.ini.example to wt7_ubuntu.ini.")
+            self.status_var.set(f"No antennas found in {config_path}. Copy wt8_ubuntu.ini.example to wt8_ubuntu.ini.")
 
         self.bind_all("<Button>", self.note_user_activity, add="+")
         self.bind_all("<Key>", self.note_user_activity, add="+")
@@ -3446,7 +3446,7 @@ class WT7App(tk.Tk):
         averaged_rows: list[dict[str, object]] = []
         scan_dir = Path(self.config_path).parent / "scan"
         scan_dir.mkdir(parents=True, exist_ok=True)
-        csv_path = scan_dir / f"wt7_scan_{config.antenna_name.lower()}_{axis_label(axis).lower()}_{datetime.now():%Y%m%d-%H%M%S}.csv"
+        csv_path = scan_dir / f"wt8_scan_{config.antenna_name.lower()}_{axis_label(axis).lower()}_{datetime.now():%Y%m%d-%H%M%S}.csv"
         try:
             offsets = self.scan_offsets(axis, config)
             total_points = len(offsets) * config.scan_count
@@ -3721,7 +3721,7 @@ class WT7App(tk.Tk):
         completed_unit = "dB"
         yfactor_dir = Path(self.config_path).parent / "yfactor"
         yfactor_dir.mkdir(parents=True, exist_ok=True)
-        log_path = yfactor_dir / f"wt7_yfactor_{antenna_name.lower()}_{datetime.now():%Y%m%d-%H%M%S}.csv"
+        log_path = yfactor_dir / f"wt8_yfactor_{antenna_name.lower()}_{datetime.now():%Y%m%d-%H%M%S}.csv"
         try:
             with log_path.open("w", newline="", encoding="utf-8") as handle:
                 fieldnames = [
@@ -5015,14 +5015,14 @@ class WT7App(tk.Tk):
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Launch WT7 two-antenna GUI.")
-    parser.add_argument("--config", default="wt7_ubuntu.ini", help="Config file. Default: wt7_ubuntu.ini")
+    parser = argparse.ArgumentParser(description="Launch WT8 two-antenna GUI.")
+    parser.add_argument("--config", default="wt8_ubuntu.ini", help="Config file. Default: wt8_ubuntu.ini")
     return parser.parse_args()
 
 
 def main() -> int:
     args = parse_args()
-    app = WT7App(args.config)
+    app = WT8App(args.config)
     try:
         app.mainloop()
     except KeyboardInterrupt:

@@ -70,6 +70,8 @@ el_track_speed = 40
 az_low_to_high_compensation = 0.200
 park_az = 355.000
 park_el = 80.000
+service_az = 0.000
+service_el = 5.000
 
 # Calibration offsets are written by the GUI calibration button.
 az_offset = 0.000000
@@ -111,6 +113,8 @@ el_track_speed = 40
 az_low_to_high_compensation = 0.500
 park_az = 355.000
 park_el = 80.000
+service_az = 0.000
+service_el = 5.000
 az_offset = 0.000000
 el_offset = 0.000000
 az_min = 270.000
