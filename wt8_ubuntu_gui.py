@@ -655,6 +655,8 @@ class WT8App(QWidget):
         super().__init__(); self.config_path=Path(config_path); self.configs=load_configs(self.config_path); self.site=load_site_config(self.config_path); self.power_config=load_power_config(self.config_path); self.sources=load_sources(self.config_path); self.selected_source_name=self.site.selected_source if self.site.selected_source in self.sources else next(iter(self.sources), '')
         self.event_log=EventLogger(Path('logs'),self.site.log_retention_days,self.site.log_level); self.state_store=AppStateStore(); self.sessions={}; self.positions={}; self.position_rate_state={}; self.cards={}; self.current_target=None; self.card_targets={}; self.tracking_kind=''; self.tracking_stop=threading.Event(); self.tracking_thread=None; self.service_stop=threading.Event(); self.service_active=False; self.park_stop=threading.Event(); self.park_active=False; self.fixed_target_mode=''; self.fixed_target_generation=0; self.tracking_starting=False; self.jog_stops={}; self.manual_axes={}; self.manual_pending={}; self.manual_modes={}; self.b210_stop=threading.Event(); self.b210_thread=None; self.events=queue.Queue(); self.event_history=[]; self.log_handle=None; self.log_writer=None; self.scan_stop=threading.Event(); self.scan_thread=None; self.scan_antenna_name=''; self.scan_axis=None; self.scan_offset_degrees=0.0; self.scan_offset_lock=threading.Lock(); self.scan_result_dialogs=[]; self.yfactor_stop=threading.Event(); self.yfactor_thread=None; self.yfactor_active=False; self.yfactor_hot_label=''; self.peak_stop=threading.Event(); self.peak_thread=None; self.tracking_nominal_az={}; self.tracking_az_comp_force={}; self.modeless_dialogs=[]; self.active_scan_antenna=''; self.active_scan_dialog=None; self.scan_resume_kind=''; self.last_user_activity=time.monotonic(); self.timeout_in_progress=False
         self.voice=VoiceAnnunciator()
+        self._voice_state_versions={}
+        self._voice_suppress_connect_stop=set()
         self.setWindowTitle(f'WT8 — Antenna Control & Tracking {APP_VERSION}'); self.resize(1380,920); self.setMinimumSize(1250,880); self.build_ui(); self.style_ui(); self.set_status('Load config, connect antennas, then use guarded jogs.'); self.event_log.info('APP_START',version=APP_VERSION,config=str(config_path))
         QApplication.instance().installEventFilter(self)
         self.t_ref=QTimer(self); self.t_ref.timeout.connect(self.update_reference); self.t_ref.start(1000); self.t_evt=QTimer(self); self.t_evt.timeout.connect(self.process_events); self.t_evt.start(100); self.t_pos=QTimer(self); self.t_pos.timeout.connect(self.poll_positions); self.t_pos.start(1000)
@@ -836,6 +838,20 @@ class WT8App(QWidget):
         self.state_store.set_status(msg,SystemRunState.IDLE)
         self.refresh_system_status()
     def announce_antenna_state(self,name,state):
+        # The card is the authority: never speak a status that has already
+        # changed on screen. Rapid CONNECTING/STOPPED/TRACKING transitions
+        # should not leave stale announcements in the audio queue.
+        version=self._voice_state_versions.get(name,0)+1
+        self._voice_state_versions[name]=version
+        if state=='STOPPED' and name in self._voice_suppress_connect_stop:
+            self._voice_suppress_connect_stop.discard(name)
+            return  # Successful connection is not a user STOP command.
+        QTimer.singleShot(650,lambda n=name,expected=state,v=version:self._announce_stable_state(n,expected,v))
+    def _announce_stable_state(self,name,state,version):
+        card=self.cards.get(name)
+        if (card is None or self._voice_state_versions.get(name)!=version
+                or card.state.text()!=state or self.voice_mute.isChecked()):
+            return
         self.voice.announce(name,state)
     def refresh_system_status(self):
         if not hasattr(self,'connection_summary'): return
@@ -921,7 +937,7 @@ class WT8App(QWidget):
         for n,c in pending: self.run_thread(lambda n=n,c=c: one(n,c),f'Connect{n}')
     def finish_connect(self,name,session,pos,error):
         if session:
-            self.sessions[name]=session; self.positions[name]=pos; self.cards[name].set_position(pos); self.cards[name].set_state('STOPPED'); self.set_status(f'{name} connected. Connected {len(self.sessions)}/{len(self.configs)} antennas.')
+            self.sessions[name]=session; self.positions[name]=pos; self.cards[name].set_position(pos); self._voice_suppress_connect_stop.add(name); self.cards[name].set_state('STOPPED'); self.set_status(f'{name} connected. Connected {len(self.sessions)}/{len(self.configs)} antennas.')
         else: self.cards[name].set_state('FAULT'); self.set_status(f'{name} connect fault: {error}')
     def disconnect_all(self):
         for name in self.cards: self.stop_jog(name)
