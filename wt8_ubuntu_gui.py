@@ -1722,7 +1722,14 @@ class WT8App(QWidget):
             src=self.sources[label]; return source_position(src.name,src.ra_hours,src.dec_degrees,self.site.latitude,self.site.longitude)
         return self.yfactor_hot_target(label)
     def poll_positions(self):
-        if not self.sessions: return
+        if not self.sessions:
+            if self.stellarium_feedback is not None:
+                self.stellarium_feedback.clear()
+            return
+        if self.stellarium_feedback is not None:
+            for antenna in ('East','West'):
+                if not any(name.lower()==antenna.lower() for name in self.sessions):
+                    self.stellarium_feedback.clear(antenna)
         def worker():
             for n,s in list(self.sessions.items()):
                 try: self.emit(lambda data:self.update_position(*data),(n,s.read_position()))
