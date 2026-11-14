@@ -69,11 +69,17 @@ class AntennaCard(Panel):
         telemetry.addWidget(self.el_rate,3,0,1,2); telemetry.addWidget(lbl('Target','muted'),3,2); telemetry.addWidget(self.target,3,3,1,2)
         g.addLayout(telemetry,1,0,1,1,Qt.AlignVCenter)
         c=QWidget(); c.setObjectName('manualPad'); cg=QGridLayout(c); cg.setContentsMargins(0,0,0,0); cg.setHorizontalSpacing(6); cg.setVerticalSpacing(6)
-        mode=QHBoxLayout(); mode.addWidget(bold('MANUAL CONTROL'))
-        self.manual_selector=QComboBox(); self.manual_selector.addItems(['MOMENTARY','LATCHED']); self.manual_selector.setMinimumWidth(115); self.manual_selector.setObjectName('manualMode')
+        mode=QHBoxLayout(); mode.setSpacing(4); mode.addWidget(bold('MANUAL CONTROL'))
+        self.manual_selector=QComboBox(); self.manual_selector.addItems(['MOMENTARY','LATCHED']); self.manual_selector.hide()
+        self.mode_momentary=btn('Momentary','modeSegment'); self.mode_latched=btn('Latched','modeSegment')
+        self.mode_momentary.setCheckable(True); self.mode_latched.setCheckable(True)
+        self.mode_momentary.setChecked(True)
+        self.mode_momentary.clicked.connect(lambda:self.manual_selector.setCurrentText('MOMENTARY'))
+        self.mode_latched.clicked.connect(lambda:self.manual_selector.setCurrentText('LATCHED'))
         self.manual_selector.currentTextChanged.connect(lambda value:self.jog_mode_changed.emit(self.name,value))
-        self.manual_selector.currentTextChanged.connect(lambda value:self.manual_hint.setText('Click active direction again to stop' if value=='LATCHED' else 'Hold a direction button to move'))
-        mode.addWidget(self.manual_selector); cg.addLayout(mode,0,0,1,3)
+        self.manual_selector.currentTextChanged.connect(self.update_manual_mode_display)
+        mode.addWidget(self.mode_momentary); mode.addWidget(self.mode_latched)
+        cg.addLayout(mode,0,0,1,3)
         for text,direction,row,col in [('N / EL+',Direction.EL_UP.value,1,1),('W / AZ-',Direction.AZ_CCW.value,2,0),('E / AZ+',Direction.AZ_CW.value,2,2),('S / EL-',Direction.EL_DOWN.value,3,1)]:
             b=btn(text); b.setObjectName('jogButton'); b.setFixedSize(100,34); b.setAutoRepeat(False)
             b.pressed.connect(lambda d=direction:self.jog_pressed.emit(self.name,d))
@@ -85,6 +91,10 @@ class AntennaCard(Panel):
         cg.setContentsMargins(12,8,12,8)
         g.addWidget(c,1,1,1,1,Qt.AlignCenter)
         g.setColumnStretch(0,5); g.setColumnStretch(1,3); g.setColumnStretch(2,0)
+    def update_manual_mode_display(self,value):
+        self.mode_momentary.setChecked(value=='MOMENTARY')
+        self.mode_latched.setChecked(value=='LATCHED')
+        self.manual_hint.setText('Click active direction again to stop' if value=='LATCHED' else 'Hold a direction button to move')
     def set_manual_active(self,directions):
         labels={Direction.AZ_CW.value:'E',Direction.AZ_CCW.value:'W',Direction.EL_UP.value:'N',Direction.EL_DOWN.value:'S'}
         for direction,button in self.jog_buttons.items():
@@ -728,7 +738,8 @@ class WT8App(QWidget):
             QPushButton#jogButton{background:#f7fbff;color:#22517e;border:1px solid #8bb6e0;font-weight:bold}
             QPushButton#jogButton[jogActive="true"]{background:#1879dc;color:white;border:2px solid #0757a7}
             QPushButton#sectionToggle{text-align:left;background:#dfeaf7;color:#205487;font-weight:bold;border-radius:5px;min-height:19px;padding:4px 10px}
-            QComboBox#manualMode{background:#ffffff;color:#174a80;border:1px solid #86add6;border-radius:5px;padding:5px;font-weight:bold}
+            QPushButton#modeSegment{background:#d8e6f5;color:#24517c;border:1px solid #a8c6e4;border-radius:4px;min-width:69px;padding:4px 5px}
+            QPushButton#modeSegment:checked{background:#1c70c2;color:white;border:1px solid #145394}
             QLineEdit{background:white;color:#152f49;border:1px solid #c3d3e4;border-radius:5px;padding:4px 7px}
             QLabel#stateGood{background:#d4f2dc;color:#185f33;border:1px solid #8bc69c;padding:5px 8px}
             QLabel#stateBusy{background:#d5e9ff;color:#15528d;border:1px solid #8cbce8;padding:5px 8px}
