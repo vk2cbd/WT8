@@ -22,6 +22,41 @@ class EquatorialPosition:
     dec_degrees: float
 
 
+def _astropy_horizontal(kind, latitude, longitude, when=None, ra_hours=None, dec_degrees=None):
+    """Geometric topocentric Alt/Az, using a consistent Astropy frame convention.
+
+    Fixed source coordinates are ICRS/J2000. Refraction is deliberately disabled
+    to agree with WT8's measured mechanical pointing and Stellarium feedback.
+    Fail closed if Astropy is unavailable; never silently revert to legacy pointing.
+    """
+    import astropy.units as u
+    from astropy.coordinates import AltAz, EarthLocation, SkyCoord, get_body, get_sun
+    from astropy.time import Time
+
+    if when is None:
+        when = datetime.now(timezone.utc)
+    if when.tzinfo is None:
+        raise ValueError("Pointing timestamp must be timezone-aware")
+    when = when.astimezone(timezone.utc)
+    location = EarthLocation(lat=latitude * u.deg, lon=longitude * u.deg, height=0 * u.m)
+    instant = Time(when)
+    frame = AltAz(obstime=instant, location=location, pressure=0 * u.hPa)
+    if kind == "source":
+        if not (math.isfinite(ra_hours) and math.isfinite(dec_degrees)
+                and -90 <= dec_degrees <= 90):
+            raise ValueError("Invalid ICRS source coordinates")
+        coord = SkyCoord(ra=(ra_hours % 24) * u.hourangle,
+                         dec=dec_degrees * u.deg, frame="icrs")
+    elif kind == "sun":
+        coord = get_sun(instant)
+    elif kind == "moon":
+        coord = get_body("moon", instant, location)
+    else:
+        raise ValueError(f"Unsupported pointing target: {kind}")
+    result = coord.transform_to(frame)
+    return float(result.az.deg), float(result.alt.deg)
+
+
 def source_position(
     name: str,
     ra_hours: float,
@@ -30,31 +65,13 @@ def source_position(
     longitude: float,
     when: Optional[datetime] = None,
 ) -> TargetPosition:
-    azimuth, elevation = equatorial_to_horizontal(ra_hours, dec_degrees, latitude, longitude, when)
+    azimuth, elevation = _astropy_horizontal('source', latitude, longitude, when, ra_hours, dec_degrees)
     return TargetPosition(name=name, azimuth=azimuth, elevation=elevation)
 
 
 def moon_position(latitude: float, longitude: float, when: Optional[datetime] = None) -> TargetPosition:
-    """Return topocentric Moon azimuth/elevation.
-
-    This uses a compact lunar model with the largest evection, variation,
-    annual-equation, and node corrections, then applies a topocentric parallax
-    correction. It is intended for antenna pointing without an online ephemeris.
-    """
-    if when is None:
-        when = datetime.now(timezone.utc)
-    when = when.astimezone(timezone.utc)
-    equatorial, distance = moon_equatorial(when)
-
-    azimuth, elevation = equatorial_to_horizontal(
-        equatorial.ra_hours,
-        equatorial.dec_degrees,
-        latitude,
-        longitude,
-        when,
-    )
-    parallax = _deg(math.asin(1.0 / distance))
-    elevation -= parallax * math.cos(_rad(elevation))
+    """Topocentric geometric Moon pointing from Astropy ephemeris."""
+    azimuth, elevation = _astropy_horizontal("moon", latitude, longitude, when)
     return TargetPosition(name="Moon", azimuth=azimuth, elevation=elevation)
 
 
