@@ -44,8 +44,8 @@ class Panel(QFrame):
 class AntennaCard(Panel):
     jog_pressed=pyqtSignal(str,str); jog_released=pyqtSignal(str,str); stop_clicked=pyqtSignal(str); jog_mode_changed=pyqtSignal(str,str)
     def __init__(self,name):
-        super().__init__(); self.name=name; self.setMinimumHeight(178); self.setMaximumHeight(210); self.jog_buttons={}
-        g=QGridLayout(self); g.setContentsMargins(10,8,10,8); g.setHorizontalSpacing(10); g.setVerticalSpacing(5)
+        super().__init__(); self.name=name; self.setMinimumHeight(196); self.setMaximumHeight(260); self.jog_buttons={}
+        g=QGridLayout(self); g.setContentsMargins(7,6,7,6); g.setHorizontalSpacing(10); g.setVerticalSpacing(5)
         title=bold(name.upper()); title.setObjectName('antennaTitle'); title.setMinimumWidth(72); self.state=lbl('DISCONNECTED','stateStopped'); lock_width(self.state,'DISCONNECTED',18)
         self.az=bold('--.--',18); self.el=bold('--.--',18); lock_width(self.az,'359.99',12); lock_width(self.el,'090.00',12)
         self.az_err=lbl('--.--'); self.el_err=lbl('--.--'); lock_width(self.az_err,'+999.99',10); lock_width(self.el_err,'+999.99',10)
@@ -54,7 +54,7 @@ class AntennaCard(Panel):
         head=QFrame(); head.setObjectName('antennaHeader'); hl=QHBoxLayout(head); hl.setContentsMargins(10,3,10,3)
         hl.addWidget(title); hl.addStretch(1); hl.addWidget(self.state)
         g.addWidget(head,0,0,1,3)
-        telemetry=QGridLayout(); telemetry.setContentsMargins(4,4,4,4); telemetry.setHorizontalSpacing(12); telemetry.setVerticalSpacing(6)
+        telemetry=QGridLayout(); telemetry.setContentsMargins(4,4,4,4); telemetry.setHorizontalSpacing(12); telemetry.setVerticalSpacing(5)
         telemetry.addWidget(lbl('AZ','muted'),0,0); telemetry.addWidget(self.az,0,1)
         telemetry.addWidget(lbl('Target AZ','muted'),0,2)
         self.target_az_display=lbl('--.--'); telemetry.addWidget(self.target_az_display,0,3)
@@ -67,22 +67,23 @@ class AntennaCard(Panel):
         telemetry.addWidget(lbl('Mode','muted'),1,6); telemetry.addWidget(self.mode,1,7)
         telemetry.addWidget(self.az_rate,2,0,1,2); telemetry.addWidget(self.az_comp,2,2,1,2)
         telemetry.addWidget(self.el_rate,3,0,1,2); telemetry.addWidget(lbl('Target','muted'),3,2); telemetry.addWidget(self.target,3,3,1,2)
-        g.addLayout(telemetry,1,0,1,1)
+        g.addLayout(telemetry,1,0,1,1,Qt.AlignVCenter)
         c=QWidget(); c.setObjectName('manualPad'); cg=QGridLayout(c); cg.setContentsMargins(0,0,0,0); cg.setHorizontalSpacing(6); cg.setVerticalSpacing(6)
-        mode=QHBoxLayout(); mode.addWidget(lbl('Manual','muted'))
-        self.manual_selector=QComboBox(); self.manual_selector.addItems(['MOMENTARY','LATCHED'])
+        mode=QHBoxLayout(); mode.addWidget(bold('MANUAL CONTROL'))
+        self.manual_selector=QComboBox(); self.manual_selector.addItems(['MOMENTARY','LATCHED']); self.manual_selector.setMinimumWidth(115)
         self.manual_selector.currentTextChanged.connect(lambda value:self.jog_mode_changed.emit(self.name,value))
         mode.addWidget(self.manual_selector); cg.addLayout(mode,0,0,1,3)
         for text,direction,row,col in [('N / EL+',Direction.EL_UP.value,1,1),('W / AZ-',Direction.AZ_CCW.value,2,0),('E / AZ+',Direction.AZ_CW.value,2,2),('S / EL-',Direction.EL_DOWN.value,3,1)]:
-            b=btn(text); b.setFixedSize(78,30); b.setAutoRepeat(False)
+            b=btn(text); b.setFixedSize(100,34); b.setAutoRepeat(False)
             b.pressed.connect(lambda d=direction:self.jog_pressed.emit(self.name,d))
             b.released.connect(lambda d=direction:self.jog_released.emit(self.name,d))
             self.jog_buttons[direction]=b; cg.addWidget(b,row,col)
-        stop=btn('STOP','danger'); stop.setFixedSize(78,30); stop.clicked.connect(lambda:self.stop_clicked.emit(self.name)); cg.addWidget(stop,2,1)
+        stop=btn('STOP','danger'); stop.setFixedSize(100,34); stop.clicked.connect(lambda:self.stop_clicked.emit(self.name)); cg.addWidget(stop,2,1)
         self.manual_summary=lbl('AZ stopped | EL stopped','muted'); cg.addWidget(self.manual_summary,4,0,1,3)
-        cg.setContentsMargins(10,5,10,5)
+        self.manual_hint=lbl('Click direction again to stop in LATCHED mode','muted'); cg.addWidget(self.manual_hint,5,0,1,3)
+        cg.setContentsMargins(12,8,12,8)
         g.addWidget(c,1,1,1,1,Qt.AlignCenter)
-        g.setColumnStretch(0,5); g.setColumnStretch(1,2); g.setColumnStretch(2,1)
+        g.setColumnStretch(0,5); g.setColumnStretch(1,3); g.setColumnStretch(2,0)
     def set_manual_active(self,directions):
         labels={Direction.AZ_CW.value:'E',Direction.AZ_CCW.value:'W',Direction.EL_UP.value:'N',Direction.EL_DOWN.value:'S'}
         for direction,button in self.jog_buttons.items():
@@ -631,18 +632,18 @@ class WT8App(QWidget):
     def __init__(self,config_path):
         super().__init__(); self.config_path=Path(config_path); self.configs=load_configs(self.config_path); self.site=load_site_config(self.config_path); self.power_config=load_power_config(self.config_path); self.sources=load_sources(self.config_path); self.selected_source_name=self.site.selected_source if self.site.selected_source in self.sources else next(iter(self.sources), '')
         self.event_log=EventLogger(Path('logs'),self.site.log_retention_days,self.site.log_level); self.state_store=AppStateStore(); self.sessions={}; self.positions={}; self.position_rate_state={}; self.cards={}; self.current_target=None; self.card_targets={}; self.tracking_kind=''; self.tracking_stop=threading.Event(); self.tracking_thread=None; self.service_stop=threading.Event(); self.service_active=False; self.park_stop=threading.Event(); self.park_active=False; self.fixed_target_mode=''; self.fixed_target_generation=0; self.tracking_starting=False; self.jog_stops={}; self.manual_axes={}; self.manual_pending={}; self.manual_modes={}; self.b210_stop=threading.Event(); self.b210_thread=None; self.events=queue.Queue(); self.event_history=[]; self.log_handle=None; self.log_writer=None; self.scan_stop=threading.Event(); self.scan_thread=None; self.scan_antenna_name=''; self.scan_axis=None; self.scan_offset_degrees=0.0; self.scan_offset_lock=threading.Lock(); self.scan_result_dialogs=[]; self.yfactor_stop=threading.Event(); self.yfactor_thread=None; self.yfactor_active=False; self.yfactor_hot_label=''; self.peak_stop=threading.Event(); self.peak_thread=None; self.tracking_nominal_az={}; self.tracking_az_comp_force={}; self.modeless_dialogs=[]; self.active_scan_antenna=''; self.active_scan_dialog=None; self.scan_resume_kind=''; self.last_user_activity=time.monotonic(); self.timeout_in_progress=False
-        self.setWindowTitle(f'WT8 — Antenna Control & Tracking {APP_VERSION}'); self.resize(1320,860); self.setMinimumSize(1180,780); self.build_ui(); self.style_ui(); self.set_status('Load config, connect antennas, then use guarded jogs.'); self.event_log.info('APP_START',version=APP_VERSION,config=str(config_path))
+        self.setWindowTitle(f'WT8 — Antenna Control & Tracking {APP_VERSION}'); self.resize(1380,920); self.setMinimumSize(1250,880); self.build_ui(); self.style_ui(); self.set_status('Load config, connect antennas, then use guarded jogs.'); self.event_log.info('APP_START',version=APP_VERSION,config=str(config_path))
         QApplication.instance().installEventFilter(self)
         self.t_ref=QTimer(self); self.t_ref.timeout.connect(self.update_reference); self.t_ref.start(1000); self.t_evt=QTimer(self); self.t_evt.timeout.connect(self.process_events); self.t_evt.start(100); self.t_pos=QTimer(self); self.t_pos.timeout.connect(self.poll_positions); self.t_pos.start(1000)
     def build_ui(self):
         main=QVBoxLayout(self); main.setContentsMargins(10,8,10,8); main.setSpacing(6)
         title=lbl(f'WT8 {APP_VERSION} — ANTENNA CONTROL & TRACKING','appTitle'); main.addWidget(title)
-        top1=QHBoxLayout(); top1.setSpacing(7)
+        top1=QHBoxLayout(); top1.setSpacing(4)
         row1=[('Connect','primary',self.connect_all),('Disconnect','',self.disconnect_all),('Limits','',self.open_limits),('Observer','',self.open_observer),('Tracking','',self.open_tracking_dialog),('Sources','',self.open_sources_dialog),('Calibration','',self.open_calibration_dialog),('Peak Cal','',self.open_peak_calibration),('Scan Cal','',self.open_scan_dialog),('Y Factor','',self.open_yfactor_dialog),('Encoders','',self.open_encoders_dialog),('STOP ALL','danger',self.stop_all)]
         for text,name,cb in row1:
             b=btn(text,name); b.clicked.connect(cb); top1.addWidget(b)
         top1.addStretch(1); main.addLayout(top1)
-        top2=QHBoxLayout(); top2.setSpacing(7)
+        top2=QHBoxLayout(); top2.setSpacing(4)
         row2=[('Track Sun','',lambda:self.start_tracking('sun')),('Track Moon','',lambda:self.start_tracking('moon')),('Track Source','',lambda:self.start_tracking('source')),('Stop Track','',self.stop_tracking),('Service','',self.service_all),('Park','',self.park_all)]
         for text,name,cb in row2:
             b=btn(text,name); b.clicked.connect(cb); top2.addWidget(b)
@@ -656,13 +657,13 @@ class WT8App(QWidget):
         self.sun=bold('SUN AZ --.-- EL --.--'); self.moon=bold('MOON AZ --.-- EL --.--'); lock_width(self.sun,'SUN AZ 359.99 EL -90.00',12); lock_width(self.moon,'MOON AZ 359.99 EL -90.00',12); sr.addWidget(self.sun,1,0,1,2); sr.addWidget(self.moon,1,2,1,5)
         self.timeout_label=lbl('Timeout off'); lock_width(self.timeout_label,'Timeout 999:59 to disconnect',10); sr.addWidget(self.timeout_label,2,0,1,7)
         ref=Panel(); ref.setMaximumWidth(260); rg=QGridLayout(ref); rg.setContentsMargins(8,7,8,7); rg.setVerticalSpacing(6); self.local=lbl('Local --'); self.utc=lbl('UTC --'); self.lmst=lbl('LMST --'); lock_width(self.local,'Local 2026-07-18 20:42:18 AEST',10); lock_width(self.utc,'UTC 2026-07-18 10:42:18',10); lock_width(self.lmst,'LMST 16:35:51',10); rg.addWidget(self.local,0,0); rg.addWidget(self.utc,1,0); rg.addWidget(self.lmst,2,0)
-        header.addWidget(src,0); header.addWidget(ref,0); header.addStretch(1); main.addLayout(header)
+        header.addWidget(src,3); header.addWidget(ref,1); main.addLayout(header)
         self.status=lbl('')
         for name in self.configs:
             card=AntennaCard(name); card.jog_pressed.connect(self.start_jog); card.jog_released.connect(self.release_jog); card.jog_mode_changed.connect(self.change_manual_mode); card.stop_clicked.connect(self.stop_antenna); self.cards[name]=card; main.addWidget(card)
         self.power=B210Panel(self.power_config); self.power.app=self; self.power.load_active_calibrations(self.config_path,self.power_config); self.power.start_clicked.connect(self.start_b210); self.power.stop_clicked.connect(self.stop_b210); self.power.cal_clicked.connect(self.open_b210_calibration); self.power.log_start_clicked.connect(self.start_b210_log); self.power.log_stop_clicked.connect(self.stop_b210_log); main.addWidget(self.power)
         bottom=QHBoxLayout(); bottom.setSpacing(8)
-        ev=Panel(); ev.setMinimumHeight(124); eg=QGridLayout(ev); eg.setContentsMargins(9,8,9,8)
+        ev=Panel(); ev.setMinimumHeight(130); eg=QGridLayout(ev); eg.setContentsMargins(9,8,9,8)
         eg.addWidget(bold('EVENT LOG'),0,0); ob=btn('Open Log'); ob.clicked.connect(self.open_log_hint); eg.addWidget(ob,0,3,Qt.AlignRight)
         self.event_view=QPlainTextEdit(); self.event_view.setReadOnly(True); self.event_view.setObjectName('eventView'); self.event_view.setMinimumHeight(82)
         eg.addWidget(self.event_view,1,0,1,4); bottom.addWidget(ev,3)
@@ -675,17 +676,22 @@ class WT8App(QWidget):
         for widget in (self.connection_summary,self.tracking_summary,self.motion_summary,self.status_summary):
             widget.setWordWrap(True); sg.addWidget(widget)
         sg.addStretch(1); bottom.addWidget(status_panel,2)
-        main.addLayout(bottom); main.addStretch(1)
+        main.addLayout(bottom)
     def style_ui(self):
         self.setStyleSheet("""
             QWidget{background:#eef3f9;color:#1b2c40;font-family:Arial,Helvetica,sans-serif;font-size:10pt}
             QLabel{background:transparent;border:none;color:#1f252b}
             QLabel#muted{color:#8a8f95}
-            QLabel#appTitle{background:#205487;color:white;font-size:16pt;font-weight:bold;padding:10px 14px;border-radius:6px}
+            QLabel#appTitle{background:#205487;color:white;font-size:14pt;font-weight:bold;padding:8px 12px;border-radius:5px}
             QLabel#antennaTitle{color:white;font-size:12pt;font-weight:bold}
             QFrame#antennaHeader{background:#205487;border-radius:4px}
             QFrame#antennaHeader QLabel{color:white}
+            QFrame#antennaHeader QLabel#stateStopped{background:#eef1f5;color:#43536a;border:1px solid #aab9c8}
+            QFrame#antennaHeader QLabel#stateBusy{background:#d4e9ff;color:#164b82;border:1px solid #80b3e8}
+            QFrame#antennaHeader QLabel#stateGood{background:#d4f4dc;color:#185c32;border:1px solid #85c69a}
+            QFrame#antennaHeader QLabel#stateFault{background:#ffe0e0;color:#9d2020;border:1px solid #dd9090}
             QWidget#manualPad{background:#eaf2fc;border:1px solid #c7d8ee;border-radius:6px}
+            QWidget#manualPad QLabel#bold{color:#205487;font-weight:bold}
             QLabel#bold{font-weight:700}
             QFrame#panel{background:#f9fbff;border:1px solid #c5d7ea;border-radius:7px}
             QPushButton{background:#fff;color:#111820;border:1px solid #cfd3d6;border-radius:8px;padding:4px 10px;min-height:20px;min-width:62px}
