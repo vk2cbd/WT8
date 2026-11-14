@@ -914,6 +914,39 @@ class WT8App(QWidget):
                 self.cards[name].set_state('STOPPED')
         if any(self.cards[name].state.text() in ('FAULT','SLEW TIMEOUT','STOPPED') for name,_ in sessions if name in self.cards):
             self.clear_fixed_target_display()
+    def disconnect_completed_fixed_move(self,mode,token,sessions):
+        """Close controllers only after every antenna has verified its final position.
+
+        Called from the fixed-position coordinator after all motion workers join.
+        Does not call stop_all(), which would erase successful completion state.
+        """
+        closed=[]
+        failures=[]
+        for name,session in sessions:
+            try:
+                session.close()
+                closed.append(name)
+            except Exception as exc:
+                failures.append((name,str(exc)))
+        self.emit(lambda result:self.finish_completed_fixed_disconnect(*result),
+                  (mode,token,closed,failures))
+
+    def finish_completed_fixed_disconnect(self,mode,token,closed,failures):
+        # UI and session dictionary are only modified on the Qt event thread.
+        for name in closed:
+            self.sessions.pop(name,None)
+            self.finish_disconnect(name)
+        for name,error in failures:
+            if name in self.cards:
+                self.cards[name].set_state('FAULT')
+            self.set_status(f'{mode}: {name} controller disconnect failed: {error}')
+        if token == self.fixed_target_generation:
+            self.clear_fixed_target_display()
+        if not failures:
+            self.set_status(f'{mode} verified; antenna controllers disconnected.')
+        else:
+            self.set_status(f'{mode} verified; {len(failures)} controller disconnect(s) failed.')
+
     def service_all(self):
         if not self.sessions:
             self.set_status('Connect antennas before Service.'); return
@@ -952,6 +985,7 @@ class WT8App(QWidget):
                         return
                 if stop.is_set(): return
                 self.emit(lambda _unused:[self.fixed_move_state('Service','moving',token,n) for n,_s in sessions],None)
+                verified=set()
                 def move_one(name,session):
                     try:
                         if stop.is_set(): return
@@ -962,6 +996,7 @@ class WT8App(QWidget):
                             lambda p,n=name:self.emit(lambda data:self.update_position(*data),(n,p)),
                             lambda **data:self.event_log.info('SERVICE_VERIFY',antenna=name,**data))
                         if not stop.is_set():
+                            verified.add(name)
                             self.emit(lambda n:self.fixed_move_state('Service','done',token,n),name)
                     except PositionCancelled:
                         pass
@@ -972,8 +1007,9 @@ class WT8App(QWidget):
                          for name,session in sessions]
                 for thread in threads: thread.start()
                 for thread in threads: thread.join()
-                if not stop.is_set():
-                    self.emit(lambda msg:self.set_status(msg),'Service positions reached; tracking disabled.')
+                if not stop.is_set() and len(verified)==len(sessions):
+                    self.emit(lambda msg:self.set_status(msg),'Service positions verified; disconnecting controllers.')
+                    self.disconnect_completed_fixed_move('Service',token,sessions)
                 else:
                     self.emit(lambda msg:self.set_status(msg),'Service movement stopped or failed.')
             finally:
@@ -1017,6 +1053,7 @@ class WT8App(QWidget):
                         return
                 if stop.is_set(): return
                 self.emit(lambda _unused:[self.fixed_move_state('Park','moving',token,n) for n,_s in sessions],None)
+                verified=set()
                 def park_one(name,session):
                     try:
                         if stop.is_set(): return
@@ -1025,6 +1062,7 @@ class WT8App(QWidget):
                             lambda p,n=name:self.emit(lambda data:self.update_position(*data),(n,p)),
                             lambda **data:self.event_log.info('PARK_VERIFY',antenna=name,**data))
                         if not stop.is_set():
+                            verified.add(name)
                             self.emit(lambda n:self.fixed_move_state('Park','done',token,n),name)
                     except PositionCancelled:
                         pass
@@ -1035,8 +1073,11 @@ class WT8App(QWidget):
                          for name,session in sessions]
                 for thread in threads: thread.start()
                 for thread in threads: thread.join()
-                self.emit(lambda msg:self.set_status(msg),
-                          'Park complete: positions verified.' if not stop.is_set() else 'Park stopped or failed.')
+                if not stop.is_set() and len(verified)==len(sessions):
+                    self.emit(lambda msg:self.set_status(msg),'Park positions verified; disconnecting controllers.')
+                    self.disconnect_completed_fixed_move('Park',token,sessions)
+                else:
+                    self.emit(lambda msg:self.set_status(msg),'Park stopped or failed; controllers remain connected.')
             finally:
                 self.emit(lambda _unused:self.finish_fixed_move('Park',token,sessions),None)
         self.run_thread(worker,'Park')
