@@ -51,23 +51,44 @@ class AntennaCard(Panel):
         self.az=bold('--.--',18); self.el=bold('--.--',18); lock_width(self.az,'359.99',12); lock_width(self.el,'090.00',12)
         self.az_err=lbl('--.--'); self.el_err=lbl('--.--'); lock_width(self.az_err,'+999.99',10); lock_width(self.el_err,'+999.99',10)
         self.limits=lbl('SAFE','safe'); lock_width(self.limits,'FAULT',18); self.mode=lbl('--'); lock_width(self.mode,'Disconnected',10); self.target=lbl('--.-- / --.--'); lock_width(self.target,'359.99 / 090.00',12); self.az_comp=lbl('AZ comp --','muted'); lock_width(self.az_comp,'AZ comp +9.99',10)
-        self.az_rate=lbl('AZ rate  --.-- deg/s','muted'); self.el_rate=lbl('EL rate  --.-- deg/s','muted'); lock_width(self.az_rate,'AZ rate  999.99 deg/s',10); lock_width(self.el_rate,'EL rate  999.99 deg/s',10)
+        self.az_rate=lbl('--.-- °/s','muted'); self.el_rate=lbl('--.-- °/s','muted')
         head=QFrame(); head.setObjectName('antennaHeader'); hl=QHBoxLayout(head); hl.setContentsMargins(10,3,10,3)
         hl.addWidget(title); hl.addStretch(1); hl.addWidget(self.state)
         g.addWidget(head,0,0,1,3)
-        telemetry=QGridLayout(); telemetry.setContentsMargins(4,4,4,4); telemetry.setHorizontalSpacing(12); telemetry.setVerticalSpacing(5)
-        telemetry.addWidget(lbl('AZ','muted'),0,0); telemetry.addWidget(self.az,0,1)
-        telemetry.addWidget(lbl('Target AZ','muted'),0,2)
-        self.target_az_display=lbl('--.--'); telemetry.addWidget(self.target_az_display,0,3)
-        telemetry.addWidget(lbl('AZ err','muted'),0,4); telemetry.addWidget(self.az_err,0,5)
-        telemetry.addWidget(lbl('Limits','muted'),0,6); telemetry.addWidget(self.limits,0,7)
-        telemetry.addWidget(lbl('EL','muted'),1,0); telemetry.addWidget(self.el,1,1)
-        telemetry.addWidget(lbl('Target EL','muted'),1,2)
-        self.target_el_display=lbl('--.--'); telemetry.addWidget(self.target_el_display,1,3)
-        telemetry.addWidget(lbl('EL err','muted'),1,4); telemetry.addWidget(self.el_err,1,5)
-        telemetry.addWidget(lbl('Mode','muted'),1,6); telemetry.addWidget(self.mode,1,7)
-        telemetry.addWidget(self.az_rate,2,0,1,2); telemetry.addWidget(self.az_comp,2,2,1,2)
-        telemetry.addWidget(self.el_rate,3,0,1,2); telemetry.addWidget(lbl('Target','muted'),3,2); telemetry.addWidget(self.target,3,3,1,2)
+        # Three equal-purpose telemetry columns make use of the full available
+        # left-hand area while retaining the existing manual jog pad at right.
+        telemetry=QHBoxLayout(); telemetry.setContentsMargins(4,4,4,4); telemetry.setSpacing(10)
+        def group(heading):
+            panel=QFrame(); panel.setObjectName('telemetryGroup')
+            layout=QGridLayout(panel); layout.setContentsMargins(10,7,10,7)
+            layout.setHorizontalSpacing(10); layout.setVerticalSpacing(5)
+            title=bold(heading,9); title.setObjectName('telemetryHeading')
+            layout.addWidget(title,0,0,1,2)
+            layout.setColumnStretch(1,1)
+            return panel,layout
+        current,current_grid=group('CURRENT POSITION')
+        current_grid.addWidget(lbl('AZ','muted'),1,0); current_grid.addWidget(self.az,1,1)
+        current_grid.addWidget(lbl('EL','muted'),2,0); current_grid.addWidget(self.el,2,1)
+        current_grid.addWidget(lbl('AZ rate','muted'),3,0)
+        current_grid.addWidget(self.az_rate,3,1)
+        current_grid.addWidget(lbl('EL rate','muted'),4,0)
+        current_grid.addWidget(self.el_rate,4,1)
+        target_panel,target_grid=group('TARGET & ERROR')
+        self.target_az_display=lbl('--.--'); self.target_el_display=lbl('--.--')
+        target_grid.addWidget(lbl('Target AZ','muted'),1,0); target_grid.addWidget(self.target_az_display,1,1)
+        target_grid.addWidget(lbl('Target EL','muted'),2,0); target_grid.addWidget(self.target_el_display,2,1)
+        target_grid.addWidget(lbl('AZ err','muted'),3,0); target_grid.addWidget(self.az_err,3,1)
+        target_grid.addWidget(lbl('EL err','muted'),4,0); target_grid.addWidget(self.el_err,4,1)
+        target_grid.addWidget(self.az_comp,5,0,1,2)
+        controller,controller_grid=group('CONTROLLER & LIMITS')
+        self.com_port=lbl('--'); self.az_limits=lbl('--'); self.el_limits=lbl('--')
+        controller_grid.addWidget(lbl('Limits','muted'),1,0); controller_grid.addWidget(self.limits,1,1)
+        controller_grid.addWidget(lbl('Mode','muted'),2,0); controller_grid.addWidget(self.mode,2,1)
+        controller_grid.addWidget(lbl('COM port','muted'),3,0); controller_grid.addWidget(self.com_port,3,1)
+        controller_grid.addWidget(lbl('AZ limits','muted'),4,0); controller_grid.addWidget(self.az_limits,4,1)
+        controller_grid.addWidget(lbl('EL limits','muted'),5,0); controller_grid.addWidget(self.el_limits,5,1)
+        for panel,stretch in ((current,3),(target_panel,3),(controller,4)):
+            telemetry.addWidget(panel,stretch)
         g.addLayout(telemetry,1,0,1,1,Qt.AlignVCenter)
         c=QWidget(); c.setObjectName('manualPad'); c.setMinimumWidth(360)
         cg=QGridLayout(c); cg.setContentsMargins(12,10,12,10); cg.setHorizontalSpacing(8); cg.setVerticalSpacing(6)
@@ -95,6 +116,11 @@ class AntennaCard(Panel):
         g.addWidget(c,1,1,1,1,Qt.AlignCenter)
         g.setColumnStretch(0,5); g.setColumnStretch(1,0); g.setColumnStretch(2,0)
         g.setRowStretch(0,0); g.setRowStretch(1,1)
+    def set_controller_config(self,config):
+        self.com_port.setText(str(config.port))
+        limits=config.limits
+        self.az_limits.setText(f'{limits.az_min:.1f}° … {limits.az_max:.1f}°')
+        self.el_limits.setText(f'{limits.el_min:.1f}° … {limits.el_max:.1f}°')
     def select_manual_mode(self,value):
         self.manual_selector.setCurrentText(value)
         self.update_manual_mode_display(value)
@@ -116,8 +142,8 @@ class AntennaCard(Panel):
     def set_position(self,pos: Optional[Position]):
         self.az.setText('--.--' if pos is None else f'{pos.azimuth:06.2f}'); self.el.setText('--.--' if pos is None else f'{pos.elevation:05.2f}')
     def set_rates(self,az_rate: Optional[float], el_rate: Optional[float]):
-        self.az_rate.setText('AZ rate  --.-- deg/s' if az_rate is None else f'AZ rate  {az_rate:0.2f} deg/s')
-        self.el_rate.setText('EL rate  --.-- deg/s' if el_rate is None else f'EL rate  {el_rate:0.2f} deg/s')
+        self.az_rate.setText('--.-- °/s' if az_rate is None else f'{az_rate:+0.2f} °/s')
+        self.el_rate.setText('--.-- °/s' if el_rate is None else f'{el_rate:+0.2f} °/s')
     def set_target(self,target: Optional[TargetPosition], pos: Optional[Position], az_comp: Optional[float] = None):
         if not target:
             self.target_az_display.setText('--.--'); self.target_el_display.setText('--.--')
@@ -744,7 +770,7 @@ class WT8App(QWidget):
         header.addWidget(src,3); header.addWidget(ref,1); main.addLayout(header)
         self.status=lbl('')
         for name in self.configs:
-            card=AntennaCard(name); card.jog_pressed.connect(self.start_jog); card.jog_released.connect(self.release_jog); card.jog_mode_changed.connect(self.change_manual_mode); card.stop_clicked.connect(self.stop_antenna); card.state_changed.connect(self.announce_antenna_state); self.cards[name]=card; main.addWidget(card)
+            card=AntennaCard(name); card.set_controller_config(self.configs[name]); card.jog_pressed.connect(self.start_jog); card.jog_released.connect(self.release_jog); card.jog_mode_changed.connect(self.change_manual_mode); card.stop_clicked.connect(self.stop_antenna); card.state_changed.connect(self.announce_antenna_state); self.cards[name]=card; main.addWidget(card)
         self.power=B210Panel(self.power_config); self.power.app=self; self.power.load_active_calibrations(self.config_path,self.power_config); self.power.start_clicked.connect(self.start_b210); self.power.stop_clicked.connect(self.stop_b210); self.power.cal_clicked.connect(self.open_b210_calibration); self.power.log_start_clicked.connect(self.start_b210_log); self.power.log_stop_clicked.connect(self.stop_b210_log)
         self.power_toggle=btn('▸ B210 SDR POWER / CALIBRATION — Show panel'); self.power_toggle.setObjectName('sectionToggle')
         self.power_toggle.clicked.connect(self.toggle_power_panel); main.addWidget(self.power_toggle)
@@ -824,6 +850,8 @@ class WT8App(QWidget):
             QLabel#stateStopped{background:#e8edf3;color:#50647a;border:1px solid #c2ceda;padding:5px 8px}
             QLabel#stateFault,QLabel#faultTag{background:#ffe1e3;color:#a6192c;border:1px solid #dba1a8;padding:5px 8px}
             QLabel#safe{background:#d6f3dd;color:#186334;border:1px solid #91caa0;padding:5px 8px;font-weight:bold}
+            QFrame#telemetryGroup{background:#f4f8fd;border:1px solid #d7e2ee;border-radius:5px}
+            QLabel#telemetryHeading{color:#274b72;font-weight:bold}
             QPlainTextEdit#eventView{background:#ffffff;color:#29435c;border:0;font-family:Arial,Helvetica,sans-serif;font-size:10pt}
         """)
     def emit(self,fn,arg=None): self.events.put((fn,arg))
@@ -892,7 +920,7 @@ class WT8App(QWidget):
                     button.setProperty('actionActive',active)
                     button.style().unpolish(button); button.style().polish(button)
         if hasattr(self,'overview'):
-            states='     '.join(f'● {name.upper()}: '+('Connected' if name in self.sessions else 'Disconnected') for name in self.cards)
+            states='     '.join(f'● {name.upper()}: '+(f'Connected ({self.configs[name].port})' if name in self.sessions else 'Disconnected') for name in self.cards)
             mode=fixed or ('MANUAL' if manual else ('TRACKING' if self.tracking_kind else 'IDLE'))
             source=self.source_name.text() if hasattr(self,'source_name') else 'None'
             self.overview.setText(f'{states}     |     Source: {source}     |     Mode: {mode}')
