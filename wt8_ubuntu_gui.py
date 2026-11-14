@@ -21,6 +21,15 @@ from wt8_precision import precision_fixed_slew, PositionCancelled
 from wt8_voice import VoiceAnnunciator
 APP_VERSION = "v0.4-dev"
 
+def serial_port_display(port: str) -> str:
+    """Show the Linux tty name for persistent /dev/serial/by-id links."""
+    path = Path(str(port))
+    if str(path).startswith('/dev/serial/by-id/'):
+        if path.exists():
+            return path.resolve().name
+        return 'device unavailable'
+    return path.name if str(path).startswith('/dev/') else str(port)
+
 def hms(seconds: float) -> str:
     seconds %= 86400.0; h=int(seconds//3600); m=int((seconds%3600)//60); s=int(seconds%60); return f"{h:02d}:{m:02d}:{s:02d}"
 def ha_text(hours: float) -> str:
@@ -922,7 +931,7 @@ class WT8App(QWidget):
                     button.setProperty('actionActive',active)
                     button.style().unpolish(button); button.style().polish(button)
         if hasattr(self,'overview'):
-            states='     '.join(f'● {name.upper()} ({self.configs[name].port}): '+('Connected' if name in self.sessions else 'Disconnected') for name in self.cards)
+            states='     '.join(f'● {name.upper()} ({serial_port_display(self.configs[name].port)}): '+('Connected' if name in self.sessions else 'Disconnected') for name in self.cards)
             mode=fixed or ('MANUAL' if manual else ('TRACKING' if self.tracking_kind else 'IDLE'))
             source=self.source_name.text() if hasattr(self,'source_name') else 'None'
             self.overview.setText(f'{states}     |     Source: {source}     |     Mode: {mode}')
