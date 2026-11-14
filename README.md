@@ -13,6 +13,36 @@ python3 -m pip install -r requirements.txt
 
 On Ubuntu, configure serial permissions, UHD/SoapySDR, B210 support and stable /dev/serial/by-id device paths.
 
+### Persistent serial ports for East and West controllers
+
+Connect both USB serial controllers and identify their stable device paths:
+
+```bash
+ls -l /dev/serial/by-id/
+```
+
+In `wt8_ubuntu.ini`, set the `port` entry in each antenna section to
+the corresponding **full path**, e.g.:
+
+```ini
+[antenna:East]
+port = /dev/serial/by-id/usb-YOUR_EAST_CONTROLLER_ID
+
+[antenna:West]
+port = /dev/serial/by-id/usb-YOUR_WEST_CONTROLLER_ID
+```
+
+These are illustrative identifiers, not actual devices. Retain the other
+existing INI settings. Verify each device's identity before assigning it to
+East or West; do not assume `ttyUSB0` always corresponds to East.
+The WT8 status bar resolves these paths to short names such as `ttyUSB0` and
+`ttyUSB1` for display, while controller connections continue using the
+persistent paths. If a configured by-id device is missing, the status bar
+shows `device unavailable`. WT8 does not automatically convert Windows
+`COM5` or `COM6` names into Linux device paths. Restart WT8 after editing
+the INI file.
+
+
 ## Configure
 
 ```bash
