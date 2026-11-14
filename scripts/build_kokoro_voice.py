@@ -67,7 +67,7 @@ def main():
     ]
     for name, state in phrases:
         phrase = f"{name.capitalize()} {PHRASES[state]}."
-        destination = args.output / f"{name}_{state.replace(' ', '_')}.wav"
+        destination = args.output / f"{name}_{state.replace(" + ", "_and_").replace(" ", "_").replace("+", "plus").replace("-", "minus")}.wav"
         samples = tidy_audio(render(pipeline, phrase, args.voice, args.speed))
         sf.write(str(destination), samples, 24000, subtype="PCM_16")
         print(f"{destination.name}: {phrase}", flush=True)

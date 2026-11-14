@@ -9,6 +9,8 @@ from wt8_voice import VoiceAnnunciator, canonical_state, phrase_path
 
 class VoiceTests(unittest.TestCase):
     def test_state_normalisation(self):
+        self.assertEqual(canonical_state("MANUAL AZ+ + EL+"), "manual az+ + el+")
+        self.assertEqual(canonical_state("MANUAL EL- + AZ-"), "manual az- + el-")
         self.assertEqual(canonical_state("MANUAL (AZ+ + EL+)"), "manual")
         self.assertEqual(canonical_state("PARKING"), "parking")
         self.assertEqual(canonical_state("SLEW TIMEOUT"), "slew timeout")
@@ -22,6 +24,8 @@ class VoiceTests(unittest.TestCase):
                          root / "west_service.wav")
         self.assertIsNone(phrase_path("../other", "TRACKING", root))
         self.assertIsNone(phrase_path("East", "../../etc", root))
+        self.assertEqual(phrase_path("East", "MANUAL AZ+ + EL-", root),
+                         root / "east_manual_azplus_and_elminus.wav")
 
     def test_volume_pcm(self):
         with tempfile.TemporaryDirectory() as directory:

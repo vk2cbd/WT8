@@ -133,7 +133,7 @@ class AntennaCard(Panel):
         self.mode_momentary.setChecked(value=='MOMENTARY')
         self.mode_latched.setChecked(value=='LATCHED')
     def set_manual_active(self,directions):
-        labels={Direction.AZ_CW.value:'E',Direction.AZ_CCW.value:'W',Direction.EL_UP.value:'N',Direction.EL_DOWN.value:'S'}
+        labels={Direction.AZ_CW.value:'AZ+',Direction.AZ_CCW.value:'AZ-',Direction.EL_UP.value:'EL+',Direction.EL_DOWN.value:'EL-'}
         for direction,button in self.jog_buttons.items():
             button.setProperty('jogActive',direction in directions)
             button.style().unpolish(button); button.style().polish(button)
@@ -942,7 +942,8 @@ class WT8App(QWidget):
             widget.style().unpolish(widget); widget.style().polish(widget)
         tracking='Active' if self.tracking_kind else 'Stopped'
         self.tracking_summary.setText(f'● Tracking: {tracking}')
-        manual=', '.join(f'{name} {axis} {entry["direction"]}' for (name,axis),entry in self.manual_axes.items())
+        manual_labels={Direction.AZ_CW.value:'AZ+',Direction.AZ_CCW.value:'AZ-',Direction.EL_UP.value:'EL+',Direction.EL_DOWN.value:'EL-'}
+        manual=', '.join(f'{name} {manual_labels[entry["direction"]]}' for (name,axis),entry in self.manual_axes.items())
         fixed='Parking' if self.park_active else ('Servicing' if self.service_active else '')
         self.motion_summary.setText('● Motion: '+(fixed or manual or 'Stopped'))
         self.status_summary.setText(self.status.text())

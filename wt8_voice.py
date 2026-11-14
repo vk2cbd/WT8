@@ -27,6 +27,14 @@ PHRASES = {
     "stopped": "stopped",
     "slewing": "slewing",
     "manual": "manual control",
+    "manual az+": "manual azimuth plus",
+    "manual az-": "manual azimuth minus",
+    "manual el+": "manual elevation plus",
+    "manual el-": "manual elevation minus",
+    "manual az+ + el+": "manual azimuth plus and elevation plus",
+    "manual az+ + el-": "manual azimuth plus and elevation minus",
+    "manual az- + el+": "manual azimuth minus and elevation plus",
+    "manual az- + el-": "manual azimuth minus and elevation minus",
     "fault": "fault",
     "slew timeout": "slew timeout",
     "yfactor": "Y factor",
@@ -40,6 +48,13 @@ PHRASES = {
 def canonical_state(state):
     state = str(state).strip().lower()
     if state.startswith("manual"):
+        directions = state[6:].strip().split(" + ")
+        directions = [direction.strip() for direction in directions]
+        if directions and all(direction in ("az+", "az-", "el+", "el-") for direction in directions):
+            az = next((direction for direction in directions if direction.startswith("az")), None)
+            el = next((direction for direction in directions if direction.startswith("el")), None)
+            if len(directions) == len(set(directions)) and len(directions) <= 2 and (len(directions) == 1 or (az and el)):
+                return "manual " + " + ".join(direction for direction in (az, el) if direction)
         return "manual"
     return state if state in PHRASES else None
 
@@ -49,7 +64,7 @@ def phrase_path(name, state, voice_dir=VOICE_DIR):
     name = str(name).strip().lower()
     if name not in ("east", "west") or key is None:
         return None
-    return Path(voice_dir) / (name + "_" + key.replace(" ", "_") + ".wav")
+    return Path(voice_dir) / (name + "_" + key.replace(" + ", "_and_").replace(" ", "_").replace("+", "plus").replace("-", "minus") + ".wav")
 
 
 class VoiceAnnunciator:
