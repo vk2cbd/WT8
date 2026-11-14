@@ -22,14 +22,14 @@ PHRASES = {
     "parking": "parking",
     "parked": "parked",
     "servicing": "servicing",
-    "service": "service complete",
+    "service": "service",
     "stopped": "stopped",
     "slewing": "slewing",
     "manual": "manual control",
     "fault": "fault",
     "slew timeout": "slew timeout",
-    "yfactor": "Y factor measurement",
-    "scan": "scanning",
+    "yfactor": "Y factor",
+    "scan": "scan",
     "scanning": "scanning",
     "idle": "idle",
     "test": "voice annunciation test",
@@ -61,6 +61,7 @@ class VoiceAnnunciator:
         self._lock = threading.Lock()
         self._queue = queue.Queue(maxsize=12)
         self._closed = False
+        self._latest_announcements = {}
         self._process = None
         self._thread = threading.Thread(target=self._run, daemon=True, name="WT8Voice")
         self._thread.start()
@@ -81,7 +82,7 @@ class VoiceAnnunciator:
         path = phrase_path(name, state, self.voice_dir)
         if path is None or not path.is_file():
             return False
-        return self._enqueue(path)
+        return self._enqueue(path, str(name).strip().lower())
 
     def say(self, message, force=False):
         # Compatibility with older GUI callers. No dynamic speech synthesis.
@@ -92,14 +93,16 @@ class VoiceAnnunciator:
         state = "test" if "test" in words else " ".join(words[1:])
         return self.announce(name, state)
 
-    def _enqueue(self, path):
+    def _enqueue(self, path, name):
         if not self.ready:
             return False
         with self._lock:
             if self._closed or self.muted:
                 return False
             try:
-                self._queue.put_nowait(path)
+                serial = self._latest_announcements.get(name, 0) + 1
+                self._latest_announcements[name] = serial
+                self._queue.put_nowait((name, serial, path))
                 return True
             except queue.Full:
                 return False
@@ -135,17 +138,20 @@ class VoiceAnnunciator:
 
     def _run(self):
         while True:
-            path = self._queue.get()
-            if path is None:
+            item = self._queue.get()
+            if item is None:
                 return
+            name, serial, path = item
             with self._lock:
-                if self._closed or self.muted:
+                if (self._closed or self.muted
+                        or self._latest_announcements.get(name) != serial):
                     continue
                 volume = self.volume
             try:
                 wav = self._volume_adjusted_wav(path, volume)
                 with self._lock:
-                    if self._closed or self.muted:
+                    if (self._closed or self.muted
+                            or self._latest_announcements.get(name) != serial):
                         continue
                     self._process = subprocess.Popen(
                         [self.engine, "-q"], stdin=subprocess.PIPE,
