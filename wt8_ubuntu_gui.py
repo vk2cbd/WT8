@@ -18,7 +18,7 @@ from wt8_solar import sun_equatorial, sun_position
 from wt8_state import AppStateStore, SystemRunState
 from wt8_service import validate_service_target
 from wt8_precision import precision_fixed_slew, PositionCancelled
-APP_VERSION = "v0.2"
+APP_VERSION = "v0.3"
 
 def hms(seconds: float) -> str:
     seconds %= 86400.0; h=int(seconds//3600); m=int((seconds%3600)//60); s=int(seconds%60); return f"{h:02d}:{m:02d}:{s:02d}"
