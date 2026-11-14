@@ -95,7 +95,7 @@ class AntennaCard(Panel):
     def set_state(self,text):
         self.state.setText(text.upper()); low=text.lower(); name='stateFault' if any(x in low for x in ['fault','timeout']) else ('stateBusy' if any(x in low for x in ['slew','park','servic','scan','yfactor','manual','connecting']) else ('stateGood' if 'tracking' in low else 'stateStopped'))
         self.state.setObjectName(name); self.state.style().unpolish(self.state); self.state.style().polish(self.state); self.mode.setText('Auto' if text.upper() in ['TRACKING','SLEWING','PARKING','SERVICING'] else text.title())
-        if text.upper() not in ['TRACKING','SLEWING','PARKING','SERVICING','SCAN','YFACTOR','MANUAL']:
+        if text.upper() not in ['TRACKING','SLEWING','PARKING','SERVICING','SCAN','YFACTOR','MANUAL'] and not text.upper().startswith('MANUAL '):
             self.set_rates(None,None)
     def set_limits_ok(self,ok):
         self.limits.setText('SAFE' if ok else 'FAULT'); self.limits.setObjectName('safe' if ok else 'faultTag'); self.limits.style().unpolish(self.limits); self.limits.style().polish(self.limits)
