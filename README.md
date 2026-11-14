@@ -32,6 +32,13 @@ The **Service** button is between **Stop Track** and **Park**. It stops source t
 
 **STOP ALL** requests cancellation of Service and sends the existing antenna stop commands. Other drive workflows are blocked while Service is active. No software check substitutes for physical clearance or hardware end stops; the initial 0° AZ / 5° EL must be verified safe for both antennas before live use.
 
+## Precision Park and Service (verification update)
+
+Both fixed-position commands now use `wt8_precision.precision_fixed_slew`.
+The routine disables direction-dependent azimuth target compensation **only for Park and Service**; tracking retains its existing behaviour. It commands a guarded slew, waits 1 second for settling, reads fresh encoders and checks the *requested* coordinates within ±0.15° on both axes. If necessary it makes at most two additional guarded low-speed corrections, verifying after each. Failure to meet tolerance raises a positioning fault instead of displaying PARKED/SERVICE. The preflight rejects targets near configured limits (margin plus 0.15°); this may reject previously accepted Park coordinates. All motion still uses the established safety controller.
+
+The event log records `PARK_VERIFY` and `SERVICE_VERIFY` with attempt, target, measured coordinates and error. Cancellation is supported by STOP ALL or individual antenna STOP; cancelled operations do not report success. **This has not yet been validated on actual antenna hardware.** Do not use these moves for unattended or personnel-safe maintenance until mechanical clearances, approach directions and stopping distances have been tested.
+
 ## Tests
 
 ```bash
