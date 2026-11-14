@@ -102,3 +102,9 @@ python3 wt8_ubuntu_gui.py --config wt8_ubuntu.ini
 The development branch now uses full-width dark-blue antenna headers, grouped AZ/EL target/error/rate telemetry, larger integrated manual pads, and a side-by-side Event Log / live System Status dashboard. The B210 panel remains available above the bottom dashboard, and the existing separate tracking, configuration, calibration, Sun/Moon, local/UTC/**LMST**, timeout and source displays are retained. This is a presentation change; the guarded motor control and Park/Service auto-disconnect remain in place.
 
 **Validation status:** committed but not yet verified by CI or physical-hardware testing. Run `QT_QPA_PLATFORM=offscreen python3 -m unittest discover -s tests -v` and visually inspect the GUI before connecting to antenna hardware. The stable `main` branch remains unchanged.
+
+### Full dashboard styling pass
+
+The experimental branch now includes a consistent blue/green/red palette, genuine Qt standard toolbar icons, high-contrast Connect/Track/Stop/Park/Service actions, coloured antenna motion states, green SAFE badges, active manual direction highlights, two-button segmented Momentary/Latched selectors, live axis status indicators, and live system-status indicators. The B210 panel is collapsible rather than removed. LMST and the full original toolbar remain available. Changes are restricted to the development branch; the original `main` and pre-redesign backup remain unchanged.
+
+**Verification caveat:** source changes are committed but have not been visually verified against a rendered Linux GUI or physically tested on the motor controllers. Run the headless tests and inspect the GUI with controllers disconnected first.
