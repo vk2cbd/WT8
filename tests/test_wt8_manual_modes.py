@@ -4,7 +4,7 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import Mock
 os.environ.setdefault('QT_QPA_PLATFORM','offscreen')
-from PyQt5.QtWidgets import QApplication
+from PyQt5.QtWidgets import QApplication, QLabel
 from wt8_ubuntu_gui import AntennaCard, WT8App
 from wt8_antenna import Direction
 
@@ -20,6 +20,10 @@ class ManualModeTests(unittest.TestCase):
         self.app.manual_modes={'East':'LATCHED'}
         self.app.sessions={'East':object()}
         self.app.cards={'East':self.card}
+        self.app.source_name=QLabel('Target --')
+        self.app.source_az=QLabel('--.--')
+        self.app.source_el=QLabel('--.--')
+        self.app.source_ha=QLabel('--')
         self.app.service_active=False
         self.app.park_active=False
         self.app.tracking_kind=''
