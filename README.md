@@ -1,6 +1,6 @@
 # WT8 — Two-antenna radio astronomy controller
 
-Current GUI version: **v0.3**.
+Current development GUI version: **v0.4-dev** (stable main remains separate).
 
 WT8 is the PyQt5 successor to WT7 v0.31 (source commit `1a42515a4f40d6dd43469572b3497d28bbf952c4`).
 The original WT7 source is preserved in the preceding WT8 migration-baseline commit `b0cb6328aeff805f6f84d46951dd500026c59c66`.
@@ -86,9 +86,9 @@ Hardware tests are required before operational use. The software tests do not es
 - `wt8_service.py`: fixed Service destination preflight
 - `wt8_config.py`: INI configuration
 - `wt8_b210_power.py`: B210 power measurement
-- `wt8_tk_legacy_gui.py`: historical Tkinter GUI reference
+- `docs/legacy/wt8_tk_legacy_gui.py`: archived historical Tkinter GUI reference
 - `tests/`: automated regression tests
-- `WT7_*.md`: archived WT7 documentation, intentionally retained under original titles
+- `docs/legacy/WT7_*.md`: archived WT7 documentation, intentionally retained under original titles
 
 The original WT7 application-description PDF remains in WT7. The GitHub connector could not transfer that binary file to WT8; refer to the WT7 repository for it.
 
@@ -145,29 +145,39 @@ The manual control heading, Momentary/Latched segmented selector, direction pad,
 
 **Test status:** the changes have been committed but automated GUI tests and visual rendering have not been executed in this session. Run `QT_QPA_PLATFORM=offscreen python3 -m unittest discover -s tests -v` before any live motor testing. The `main` and backup branches remain unchanged.
 
-### Antenna voice annunciation (experimental branch)
+### Offline Kokoro voice annunciation (development branch)
 
-The GUI announces East/West antenna **state transitions** (e.g. East tracking, West parking, East fault), not every AZ/EL telemetry update. Mute is enabled on startup. A volume slider and Test Voice button are next to the connection overview. The voice engine runs in a separate daemon thread and uses the offline Ubuntu `espeak-ng` female English voice (fallback `espeak`). Install with `sudo apt install espeak-ng`. If neither engine is installed the GUI continues to operate, the Test Voice button is disabled, and a setup hint appears. The Test Voice button respects Mute. State announcements are queued; rapid transitions may be omitted if the bounded queue fills. No hardware motion commands are issued by the voice engine.
+WT8 plays pre-rendered East/West state-announcement WAV files through Ubuntu's
+`aplay`. The current voice is **Kokoro `bf_emma`**, British English female.
+Speech generation is an optional one-time preparation step; **neither Kokoro
+nor a Python voice virtual environment is needed at runtime**.
 
-## Australian female neural voice — offline prerecorded announcements
-
-The development branch replaces the earlier harsh eSpeak runtime engine with **Piper Australian English** speech. The default is **Matilda**, a female Australian voice (speaker ID 7) in the DataCraftsmanAustralia `en_AU-librivox-medium` multi-speaker model. Other female choices: Bindi (1), Marlo (2), Kirra (3), Tully (8), Willow (9). The model and its voice samples are published at https://huggingface.co/DataCraftsmanAustralia/piper-en_AU-librivox-medium . The model is CC BY 4.0; attribution to the model authors and to Jenny (Dioco) for the base checkpoint is required. See the model's ATTRIBUTION.md.
-
-**One-time installation and voice generation on Ubuntu 24.04** (internet required only for this step):
+To generate or regenerate the current voice pack:
 
 ```bash
 cd ~/WT8-DEV
-git pull origin feature/manual-latched-gui-redesign
-sudo apt install alsa-utils python3-venv
-python3 -m venv .voice-venv
-.voice-venv/bin/python -m pip install piper-tts
-.voice-venv/bin/python scripts/build_au_voice.py --voice Matilda
+sudo apt install alsa-utils python3-venv libsndfile1 espeak-ng
+python3 -m venv .kokoro-venv
+.kokoro-venv/bin/python -m pip install --upgrade pip
+.kokoro-venv/bin/python -m pip install kokoro soundfile
+.kokoro-venv/bin/python scripts/build_kokoro_voice.py --voice bf_emma
+aplay voice/en_AU_female/west_tracking.wav
 ```
 
-This downloads the approximately 77 MB ONNX model and config to `voice/models/`, then renders WAV clips to `voice/en_AU_female/`. These binary files are local and intentionally excluded from Git. Generation may take several minutes on CPU. To audition a different female voice, rerun the generator with `--voice Kirra` (or Bindi, Marlo, Tully, Willow) and restart WT8.
+The folder `voice/en_AU_female/` retains its historical name for runtime
+compatibility, even though the voice is British. The generated WAV files are
+local and Git-ignored; **do not delete them during repository cleanup**.
+Once generated, the optional `.kokoro-venv` can be removed.
 
-**Runtime:** WT8 reads the prerecorded WAVs and plays them using Ubuntu's `aplay`; Piper, network access and eSpeak are *not* needed when operating antennas. Voice announcements are triggered by antenna state transitions, each prefixed with East or West; the existing Mute, Volume and Test Voice controls remain. Mute defaults ON. A missing voice pack or missing `aplay` disables the test button and does not interfere with motor controls. Volume is applied to PCM samples, not system-wide audio settings. Speech runs in a background thread, with no network or model inference during operations.
+The Mute and Volume controls are persisted using Qt QSettings and restored
+when the GUI starts. State announcements are delayed briefly to suppress
+transient states and obsolete queued announcements are skipped. Voice is
+informational only, not a safety interlock; motor commands never wait for
+audio. A missing voice pack or `aplay` must not affect motion control.
 
-**Safety/behaviour:** Announcements are informational, not safety interlocks. WT8 only plays approved fixed phrases; variable text or unsupported states are silent. Motor control and STOP commands do not wait for audio. A rapid sequence may queue announcements; mute cancels queued and current audio. Test with controllers disconnected first. The neural voice is based on literary narration and may not pronounce technical words perfectly; audition before operational use.
+### Historical code and documentation
 
-**Verification status:** Code and unit tests are committed; generation and playback have not been executed on the Ubuntu host in this session.
+The former Tkinter application, WT7 design documents, and superseded Piper
+voice generator are archived in `docs/legacy/`. They are retained for
+reference but are not part of the active PyQt5 application. Do not run the
+historical Tkinter GUI against connected controllers alongside WT8.
