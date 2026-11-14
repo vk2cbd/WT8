@@ -677,7 +677,10 @@ class WT8App(QWidget):
         voice_row.addWidget(lbl('Volume'))
         self.voice_volume=QSlider(Qt.Horizontal); self.voice_volume.setRange(0,100); self.voice_volume.setValue(70); self.voice_volume.setFixedWidth(145)
         self.voice_volume.valueChanged.connect(self.voice.set_volume); voice_row.addWidget(self.voice_volume)
-        self.voice_test=btn('Test Voice'); self.voice_test.clicked.connect(lambda:self.voice.say('East voice annunciation test',force=True)); voice_row.addWidget(self.voice_test)
+        self.voice_test=btn('Test Voice'); self.voice_test.clicked.connect(lambda:self.voice.say('East voice annunciation test')); voice_row.addWidget(self.voice_test)
+        if not self.voice.engine:
+            self.voice_test.setEnabled(False)
+            voice_row.addWidget(lbl('Install espeak-ng to enable voice','muted'))
         voice_row.addStretch(1); main.addLayout(voice_row)
         # Two toolbar rows avoid clipped text on smaller Ubuntu displays and HiDPI scaling.
         self.action_buttons={}
