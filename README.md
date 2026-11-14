@@ -81,6 +81,13 @@ Hardware tests are required before operational use. The software tests do not es
 
 ## Repository contents
 
+The development application imports its active controller, astronomy, calibration,
+configuration, safety and voice functionality directly from the maintained modules.
+The unused compatibility modules `wt8_protocol.py`, `wt8_safety.py`,
+`wt8_tracking.py` and `wt8_calibration.py` were retired in the Stage 2 cleanup.
+Their earlier implementations remain available through Git history. External
+scripts importing those interfaces must be updated before upgrading.
+
 - `wt8_ubuntu_gui.py`: PyQt5 GUI and Service workflow
 - `wt8_antenna.py`: Arduino protocol and guarded motion
 - `wt8_service.py`: fixed Service destination preflight
