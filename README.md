@@ -96,3 +96,9 @@ python3 wt8_ubuntu_gui.py --config wt8_ubuntu.ini
 ```
 
 **Do not operate the stable and development copies against the same controller simultaneously.** Verify STOP, reversal, software limits, motion timeout and both-axis control under attended conditions before using the development build operationally. For rollback, use your existing `main` checkout, or switch the development checkout to `backup/pre-gui-redesign-2026-11-14` after stopping the application.
+
+### Mockup-alignment layout revision (2026-11-14)
+
+The development branch now uses full-width dark-blue antenna headers, grouped AZ/EL target/error/rate telemetry, larger integrated manual pads, and a side-by-side Event Log / live System Status dashboard. The B210 panel remains available above the bottom dashboard, and the existing separate tracking, configuration, calibration, Sun/Moon, local/UTC/**LMST**, timeout and source displays are retained. This is a presentation change; the guarded motor control and Park/Service auto-disconnect remain in place.
+
+**Validation status:** committed but not yet verified by CI or physical-hardware testing. Run `QT_QPA_PLATFORM=offscreen python3 -m unittest discover -s tests -v` and visually inspect the GUI before connecting to antenna hardware. The stable `main` branch remains unchanged.
