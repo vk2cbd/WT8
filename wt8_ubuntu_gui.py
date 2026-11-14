@@ -536,6 +536,13 @@ class StellariumDialog(SimpleDialog):
         name=str(data.get('name') or data.get('englishName') or data.get('localizedName') or '').strip()
         if not name or len(name)>100:
             raise ValueError('Missing or invalid object name')
+        # Stellarium's getObjectInfo map returns raJ2000 and decJ2000
+        # as decimal DEGREES, not hours or sexagesimal strings.
+        if isinstance(ra,(int,float)) and not isinstance(ra,bool) and isinstance(dec,(int,float)) and not isinstance(dec,bool):
+            ra_deg=float(ra); dec_deg=float(dec)
+            if not math.isfinite(ra_deg) or not math.isfinite(dec_deg) or not 0<=ra_deg<=360 or not -90<=dec_deg<=90:
+                raise ValueError('J2000 coordinates outside valid range')
+            return SourceConfig(name,(ra_deg/15.0)%24,dec_deg,0.0)
         if not isinstance(ra,str) or not isinstance(dec,str):
             raise ValueError('Unexpected J2000 coordinate representation; inspect raw response')
         if not re.search(r'[h:]|\\s',ra.lower()) or not re.search(r'[d°:]|\\s',dec.lower()):
@@ -572,14 +579,14 @@ class StellariumDialog(SimpleDialog):
         try:
             source=self.parse_source(data)
         except Exception as exc:
-            self.preview.setPlainText('Import not available: '+str(exc)+'\\n\\nRaw object data:\\n'+json.dumps(data,indent=2,ensure_ascii=False)[:12000])
+            self.preview.setPlainText('Import not available: '+str(exc)+'\n\nRaw object data:\n'+json.dumps(data,indent=2,ensure_ascii=False)[:12000])
             return
         self.pending=source
         self.accept_button.setEnabled(True)
         self.preview.setPlainText(
-            f'Object: {source.name}\\nRA (J2000): {source.ra_hours:.8f} hours\\n'
-            f'Dec (J2000): {source.dec_degrees:+.8f} degrees\\n\\n'
-            'Accept adds/selects the source in WT8. It does NOT start tracking or move either antenna.\\n'
+            f'Object: {source.name}\nRA (J2000): {source.ra_hours:.8f} hours\n'
+            f'Dec (J2000): {source.dec_degrees:+.8f} degrees\n\n'
+            'Accept adds/selects the source in WT8. It does NOT start tracking or move either antenna.\n'
             'Verify the coordinate epoch and source identity before using Track Source.'
         )
 
