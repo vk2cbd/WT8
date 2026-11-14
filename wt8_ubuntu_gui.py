@@ -18,7 +18,7 @@ from wt8_solar import sun_equatorial, sun_position
 from wt8_state import AppStateStore, SystemRunState
 from wt8_service import validate_service_target
 from wt8_precision import precision_fixed_slew, PositionCancelled
-APP_VERSION = "v0.3"
+APP_VERSION = "v0.4-dev"
 
 def hms(seconds: float) -> str:
     seconds %= 86400.0; h=int(seconds//3600); m=int((seconds%3600)//60); s=int(seconds%60); return f"{h:02d}:{m:02d}:{s:02d}"
@@ -42,9 +42,9 @@ RATE_MIN_INTERVAL_SECONDS = 0.15
 class Panel(QFrame):
     def __init__(self): super().__init__(); self.setObjectName('panel'); self.setFrameShape(QFrame.StyledPanel)
 class AntennaCard(Panel):
-    jog_pressed=pyqtSignal(str,str); jog_released=pyqtSignal(str); stop_clicked=pyqtSignal(str)
+    jog_pressed=pyqtSignal(str,str); jog_released=pyqtSignal(str,str); stop_clicked=pyqtSignal(str); jog_mode_changed=pyqtSignal(str,str)
     def __init__(self,name):
-        super().__init__(); self.name=name; self.setMinimumHeight(146); self.setMaximumHeight(162)
+        super().__init__(); self.name=name; self.setMinimumHeight(180); self.setMaximumHeight(220); self.jog_buttons={}
         g=QGridLayout(self); g.setContentsMargins(10,8,10,8); g.setHorizontalSpacing(10); g.setVerticalSpacing(5)
         title=bold(name.upper()); title.setMinimumWidth(72); self.state=lbl('DISCONNECTED','stateStopped'); lock_width(self.state,'DISCONNECTED',18)
         self.az=bold('--.--',18); self.el=bold('--.--',18); lock_width(self.az,'359.99',12); lock_width(self.el,'090.00',12)
@@ -57,12 +57,29 @@ class AntennaCard(Panel):
         g.addWidget(self.az_rate,3,0,1,2); g.addWidget(lbl('Target','muted'),3,3); g.addWidget(self.target,3,4); g.addWidget(self.az_comp,3,5,1,2)
         g.addWidget(self.el_rate,4,0,1,2)
         c=QWidget(); c.setObjectName('manualPad'); cg=QGridLayout(c); cg.setContentsMargins(0,0,0,0); cg.setHorizontalSpacing(6); cg.setVerticalSpacing(6)
-        for text,direction,row,col in [('EL+',Direction.EL_UP.value,0,1),('AZ-',Direction.AZ_CCW.value,1,0),('AZ+',Direction.AZ_CW.value,1,2),('EL-',Direction.EL_DOWN.value,2,1)]:
-            b=btn(text); b.setFixedSize(64,30); b.pressed.connect(lambda d=direction: self.jog_pressed.emit(self.name,d)); b.released.connect(lambda: self.jog_released.emit(self.name)); cg.addWidget(b,row,col)
-        stop=btn('STOP'); stop.setFixedSize(64,30); stop.clicked.connect(lambda: self.stop_clicked.emit(self.name)); cg.addWidget(stop,1,1)
+        mode=QHBoxLayout(); mode.addWidget(lbl('Manual','muted'))
+        self.manual_selector=QComboBox(); self.manual_selector.addItems(['MOMENTARY','LATCHED'])
+        self.manual_selector.currentTextChanged.connect(lambda value:self.jog_mode_changed.emit(self.name,value))
+        mode.addWidget(self.manual_selector); cg.addLayout(mode,0,0,1,3)
+        for text,direction,row,col in [('N / EL+',Direction.EL_UP.value,1,1),('W / AZ-',Direction.AZ_CCW.value,2,0),('E / AZ+',Direction.AZ_CW.value,2,2),('S / EL-',Direction.EL_DOWN.value,3,1)]:
+            b=btn(text); b.setFixedSize(78,30); b.setAutoRepeat(False)
+            b.pressed.connect(lambda d=direction:self.jog_pressed.emit(self.name,d))
+            b.released.connect(lambda d=direction:self.jog_released.emit(self.name,d))
+            self.jog_buttons[direction]=b; cg.addWidget(b,row,col)
+        stop=btn('STOP','danger'); stop.setFixedSize(78,30); stop.clicked.connect(lambda:self.stop_clicked.emit(self.name)); cg.addWidget(stop,2,1)
+        self.manual_summary=lbl('AZ stopped | EL stopped','muted'); cg.addWidget(self.manual_summary,4,0,1,3)
         g.addWidget(c,1,7,4,3,Qt.AlignLeft|Qt.AlignVCenter)
         g.setColumnMinimumWidth(1,self.az.maximumWidth()); g.setColumnMinimumWidth(2,18); g.setColumnMinimumWidth(4,self.az_err.maximumWidth()); g.setColumnMinimumWidth(6,self.limits.maximumWidth())
         g.setColumnMinimumWidth(7,6); g.setColumnStretch(10,1)
+    def set_manual_active(self,directions):
+        labels={Direction.AZ_CW.value:'E',Direction.AZ_CCW.value:'W',Direction.EL_UP.value:'N',Direction.EL_DOWN.value:'S'}
+        for direction,button in self.jog_buttons.items():
+            button.setProperty('jogActive',direction in directions)
+            button.style().unpolish(button); button.style().polish(button)
+        az=next((labels[d] for d in directions if d in (Direction.AZ_CW.value,Direction.AZ_CCW.value)),'stopped')
+        el=next((labels[d] for d in directions if d in (Direction.EL_UP.value,Direction.EL_DOWN.value)),'stopped')
+        self.manual_summary.setText(f'AZ {az} | EL {el}')
+        if directions: self.set_state('MANUAL '+ ' + '.join(labels[d] for d in directions))
     def set_position(self,pos: Optional[Position]):
         self.az.setText('--.--' if pos is None else f'{pos.azimuth:06.2f}'); self.el.setText('--.--' if pos is None else f'{pos.elevation:05.2f}')
     def set_rates(self,az_rate: Optional[float], el_rate: Optional[float]):
@@ -599,12 +616,13 @@ PowerMeterPanel = B210Panel
 class WT8App(QWidget):
     def __init__(self,config_path):
         super().__init__(); self.config_path=Path(config_path); self.configs=load_configs(self.config_path); self.site=load_site_config(self.config_path); self.power_config=load_power_config(self.config_path); self.sources=load_sources(self.config_path); self.selected_source_name=self.site.selected_source if self.site.selected_source in self.sources else next(iter(self.sources), '')
-        self.event_log=EventLogger(Path('logs'),self.site.log_retention_days,self.site.log_level); self.state_store=AppStateStore(); self.sessions={}; self.positions={}; self.position_rate_state={}; self.cards={}; self.current_target=None; self.card_targets={}; self.tracking_kind=''; self.tracking_stop=threading.Event(); self.tracking_thread=None; self.service_stop=threading.Event(); self.service_active=False; self.park_stop=threading.Event(); self.park_active=False; self.fixed_target_mode=''; self.fixed_target_generation=0; self.tracking_starting=False; self.jog_stops={}; self.b210_stop=threading.Event(); self.b210_thread=None; self.events=queue.Queue(); self.event_history=[]; self.log_handle=None; self.log_writer=None; self.scan_stop=threading.Event(); self.scan_thread=None; self.scan_antenna_name=''; self.scan_axis=None; self.scan_offset_degrees=0.0; self.scan_offset_lock=threading.Lock(); self.scan_result_dialogs=[]; self.yfactor_stop=threading.Event(); self.yfactor_thread=None; self.yfactor_active=False; self.yfactor_hot_label=''; self.peak_stop=threading.Event(); self.peak_thread=None; self.tracking_nominal_az={}; self.tracking_az_comp_force={}; self.modeless_dialogs=[]; self.active_scan_antenna=''; self.active_scan_dialog=None; self.scan_resume_kind=''; self.last_user_activity=time.monotonic(); self.timeout_in_progress=False
-        self.setWindowTitle(f'WT8 ANTENNA CONTROLLER {APP_VERSION}'); self.resize(1120,780); self.setMinimumSize(1080,720); self.build_ui(); self.style_ui(); self.set_status('Load config, connect antennas, then use guarded jogs.'); self.event_log.info('APP_START',version=APP_VERSION,config=str(config_path))
+        self.event_log=EventLogger(Path('logs'),self.site.log_retention_days,self.site.log_level); self.state_store=AppStateStore(); self.sessions={}; self.positions={}; self.position_rate_state={}; self.cards={}; self.current_target=None; self.card_targets={}; self.tracking_kind=''; self.tracking_stop=threading.Event(); self.tracking_thread=None; self.service_stop=threading.Event(); self.service_active=False; self.park_stop=threading.Event(); self.park_active=False; self.fixed_target_mode=''; self.fixed_target_generation=0; self.tracking_starting=False; self.jog_stops={}; self.manual_axes={}; self.manual_pending={}; self.manual_modes={}; self.b210_stop=threading.Event(); self.b210_thread=None; self.events=queue.Queue(); self.event_history=[]; self.log_handle=None; self.log_writer=None; self.scan_stop=threading.Event(); self.scan_thread=None; self.scan_antenna_name=''; self.scan_axis=None; self.scan_offset_degrees=0.0; self.scan_offset_lock=threading.Lock(); self.scan_result_dialogs=[]; self.yfactor_stop=threading.Event(); self.yfactor_thread=None; self.yfactor_active=False; self.yfactor_hot_label=''; self.peak_stop=threading.Event(); self.peak_thread=None; self.tracking_nominal_az={}; self.tracking_az_comp_force={}; self.modeless_dialogs=[]; self.active_scan_antenna=''; self.active_scan_dialog=None; self.scan_resume_kind=''; self.last_user_activity=time.monotonic(); self.timeout_in_progress=False
+        self.setWindowTitle(f'WT8 — Antenna Control & Tracking {APP_VERSION}'); self.resize(1460,900); self.setMinimumSize(1250,810); self.build_ui(); self.style_ui(); self.set_status('Load config, connect antennas, then use guarded jogs.'); self.event_log.info('APP_START',version=APP_VERSION,config=str(config_path))
         QApplication.instance().installEventFilter(self)
         self.t_ref=QTimer(self); self.t_ref.timeout.connect(self.update_reference); self.t_ref.start(1000); self.t_evt=QTimer(self); self.t_evt.timeout.connect(self.process_events); self.t_evt.start(100); self.t_pos=QTimer(self); self.t_pos.timeout.connect(self.poll_positions); self.t_pos.start(1000)
     def build_ui(self):
         main=QVBoxLayout(self); main.setContentsMargins(18,10,18,10); main.setSpacing(8)
+        title=lbl(f'WT8 {APP_VERSION} — ANTENNA CONTROL & TRACKING','appTitle'); main.addWidget(title)
         top1=QHBoxLayout(); top1.setSpacing(7)
         row1=[('Connect','primary',self.connect_all),('Disconnect','',self.disconnect_all),('Limits','',self.open_limits),('Observer','',self.open_observer),('Tracking','',self.open_tracking_dialog),('Sources','',self.open_sources_dialog),('Calibration','',self.open_calibration_dialog),('Peak Cal','',self.open_peak_calibration),('Scan Cal','',self.open_scan_dialog),('Y Factor','',self.open_yfactor_dialog),('Encoders','',self.open_encoders_dialog),('STOP ALL','danger',self.stop_all)]
         for text,name,cb in row1:
@@ -627,18 +645,20 @@ class WT8App(QWidget):
         header.addWidget(src,0); header.addWidget(ref,0); header.addStretch(1); main.addLayout(header)
         self.status=lbl('')
         for name in self.configs:
-            card=AntennaCard(name); card.jog_pressed.connect(self.start_jog); card.jog_released.connect(self.stop_jog); card.stop_clicked.connect(self.stop_antenna); self.cards[name]=card; main.addWidget(card)
+            card=AntennaCard(name); card.jog_pressed.connect(self.start_jog); card.jog_released.connect(self.release_jog); card.jog_mode_changed.connect(self.change_manual_mode); card.stop_clicked.connect(self.stop_antenna); self.cards[name]=card; main.addWidget(card)
         self.power=B210Panel(self.power_config); self.power.app=self; self.power.load_active_calibrations(self.config_path,self.power_config); self.power.start_clicked.connect(self.start_b210); self.power.stop_clicked.connect(self.stop_b210); self.power.cal_clicked.connect(self.open_b210_calibration); self.power.log_start_clicked.connect(self.start_b210_log); self.power.log_stop_clicked.connect(self.stop_b210_log); main.addWidget(self.power)
         ev=Panel(); ev.setMinimumHeight(96); eg=QGridLayout(ev); eg.setContentsMargins(9,8,9,8); eg.addWidget(bold('RECENT EVENTS'),0,0); ob=btn('Open Log'); ob.clicked.connect(self.open_log_hint); eg.addWidget(ob,0,3,Qt.AlignRight); self.event_view=QPlainTextEdit(); self.event_view.setReadOnly(True); self.event_view.setObjectName('eventView'); self.event_view.setMinimumHeight(58); eg.addWidget(self.event_view,1,0,1,4); main.addWidget(ev); main.addStretch(1)
     def style_ui(self):
         self.setStyleSheet("""
-            QWidget{background:#f6f6f5;color:#1f252b;font-family:Arial,Helvetica,sans-serif;font-size:10pt}
+            QWidget{background:#eef3f9;color:#1b2c40;font-family:Arial,Helvetica,sans-serif;font-size:10pt}
             QLabel{background:transparent;border:none;color:#1f252b}
             QLabel#muted{color:#8a8f95}
+            QLabel#appTitle{background:#205487;color:white;font-size:16pt;font-weight:bold;padding:10px 14px;border-radius:6px}
             QLabel#bold{font-weight:700}
-            QFrame#panel{background:#f1f1f0;border:1px solid #d7d7d5}
+            QFrame#panel{background:#f9fbff;border:1px solid #c5d7ea;border-radius:7px}
             QPushButton{background:#fff;color:#111820;border:1px solid #cfd3d6;border-radius:8px;padding:4px 10px;min-height:20px;min-width:62px}
             QPushButton:hover{background:#eef4fb;border-color:#9bbbe0}
+            QPushButton[jogActive="true"]{background:#1675d1;color:white;border:2px solid #0756a7}
             QPushButton:pressed{background:#cfe0f4;border:2px solid #4d87c7;padding:3px 9px}
             QPushButton#primary{background:#121820;color:white;border-color:#121820}
             QPushButton#primary:hover{background:#243244;border-color:#243244}
@@ -1206,7 +1226,7 @@ class WT8App(QWidget):
     def antenna_rate_active(self,name):
         card=self.cards.get(name)
         if not card: return False
-        return card.state.text() in ('TRACKING','SLEWING','PARKING','SERVICING','SCAN','YFACTOR','MANUAL')
+        return card.state.text() in ('TRACKING','SLEWING','PARKING','SERVICING','SCAN','YFACTOR','MANUAL') or card.state.text().startswith('MANUAL ')
     def update_position_rates(self,name,pos):
         now=time.monotonic(); previous=self.position_rate_state.get(name)
         card=self.cards.get(name)
