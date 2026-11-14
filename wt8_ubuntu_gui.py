@@ -84,9 +84,8 @@ class AntennaCard(Panel):
         self.com_port=lbl('--'); self.az_limits=lbl('--'); self.el_limits=lbl('--')
         controller_grid.addWidget(lbl('Limits','muted'),1,0); controller_grid.addWidget(self.limits,1,1)
         controller_grid.addWidget(lbl('Mode','muted'),2,0); controller_grid.addWidget(self.mode,2,1)
-        controller_grid.addWidget(lbl('COM port','muted'),3,0); controller_grid.addWidget(self.com_port,3,1)
-        controller_grid.addWidget(lbl('AZ limits','muted'),4,0); controller_grid.addWidget(self.az_limits,4,1)
-        controller_grid.addWidget(lbl('EL limits','muted'),5,0); controller_grid.addWidget(self.el_limits,5,1)
+        controller_grid.addWidget(lbl('AZ limits','muted'),3,0); controller_grid.addWidget(self.az_limits,3,1)
+        controller_grid.addWidget(lbl('EL limits','muted'),4,0); controller_grid.addWidget(self.el_limits,4,1)
         for panel,stretch in ((current,3),(target_panel,3),(controller,4)):
             telemetry.addWidget(panel,stretch)
         g.addLayout(telemetry,1,0,1,1,Qt.AlignVCenter)
@@ -923,7 +922,7 @@ class WT8App(QWidget):
                     button.setProperty('actionActive',active)
                     button.style().unpolish(button); button.style().polish(button)
         if hasattr(self,'overview'):
-            states='     '.join(f'● {name.upper()}: '+(f'Connected ({self.configs[name].port})' if name in self.sessions else 'Disconnected') for name in self.cards)
+            states='     '.join(f'● {name.upper()} ({self.configs[name].port}): '+('Connected' if name in self.sessions else 'Disconnected') for name in self.cards)
             mode=fixed or ('MANUAL' if manual else ('TRACKING' if self.tracking_kind else 'IDLE'))
             source=self.source_name.text() if hasattr(self,'source_name') else 'None'
             self.overview.setText(f'{states}     |     Source: {source}     |     Mode: {mode}')
