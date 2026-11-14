@@ -568,7 +568,6 @@ class ScanSettingsDialog(SimpleDialog):
             self.stop_scan(); self.set_status('Scan stop requested; close after scan cleanup finishes.'); return
         self.reject()
     def closeEvent(self,event):
-        self.voice.close()
         if getattr(self.app,'is_scan_running',lambda:False)():
             self.stop_scan(); self.set_status('Scan stop requested; close after scan cleanup finishes.'); event.ignore(); return
         event.accept()
@@ -677,10 +676,10 @@ class WT8App(QWidget):
         voice_row.addWidget(lbl('Volume'))
         self.voice_volume=QSlider(Qt.Horizontal); self.voice_volume.setRange(0,100); self.voice_volume.setValue(70); self.voice_volume.setFixedWidth(145)
         self.voice_volume.valueChanged.connect(self.voice.set_volume); voice_row.addWidget(self.voice_volume)
-        self.voice_test=btn('Test Voice'); self.voice_test.clicked.connect(lambda:self.voice.say('East voice annunciation test')); voice_row.addWidget(self.voice_test)
-        if not self.voice.engine:
+        self.voice_test=btn('Test Voice'); self.voice_test.clicked.connect(lambda:self.voice.announce('East','test')); voice_row.addWidget(self.voice_test)
+        if not self.voice.ready:
             self.voice_test.setEnabled(False)
-            voice_row.addWidget(lbl('Install espeak-ng to enable voice','muted'))
+            voice_row.addWidget(lbl('Generate Australian voice pack (see README)','muted'))
         voice_row.addStretch(1); main.addLayout(voice_row)
         # Two toolbar rows avoid clipped text on smaller Ubuntu displays and HiDPI scaling.
         self.action_buttons={}
@@ -837,7 +836,7 @@ class WT8App(QWidget):
         self.state_store.set_status(msg,SystemRunState.IDLE)
         self.refresh_system_status()
     def announce_antenna_state(self,name,state):
-        self.voice.say(f'{name} {state.lower()}')
+        self.voice.announce(name,state)
     def refresh_system_status(self):
         if not hasattr(self,'connection_summary'): return
         total=len(self.configs); connected=len(self.sessions)
@@ -1815,6 +1814,7 @@ class WT8App(QWidget):
         if self.log_handle: self.log_handle.close(); self.set_status('B210 log stopped.')
         self.log_handle=None; self.log_writer=None
     def closeEvent(self,event):
+        self.voice.close()
         self.event_log.info('APP_STOP',version=APP_VERSION); self.stop_b210(); self.stop_all()
         for s in list(self.sessions.values()):
             try: s.close()
