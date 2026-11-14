@@ -17,6 +17,7 @@ from wt8_logging import EventLogger
 from wt8_solar import sun_equatorial, sun_position
 from wt8_state import AppStateStore, SystemRunState
 from wt8_service import validate_service_target
+from wt8_precision import precision_fixed_slew, PositionCancelled
 APP_VERSION = "v0.2"
 
 def hms(seconds: float) -> str:
@@ -598,7 +599,7 @@ PowerMeterPanel = B210Panel
 class WT8App(QWidget):
     def __init__(self,config_path):
         super().__init__(); self.config_path=Path(config_path); self.configs=load_configs(self.config_path); self.site=load_site_config(self.config_path); self.power_config=load_power_config(self.config_path); self.sources=load_sources(self.config_path); self.selected_source_name=self.site.selected_source if self.site.selected_source in self.sources else next(iter(self.sources), '')
-        self.event_log=EventLogger(Path('logs'),self.site.log_retention_days,self.site.log_level); self.state_store=AppStateStore(); self.sessions={}; self.positions={}; self.position_rate_state={}; self.cards={}; self.current_target=None; self.card_targets={}; self.tracking_kind=''; self.tracking_stop=threading.Event(); self.tracking_thread=None; self.service_stop=threading.Event(); self.service_active=False; self.tracking_starting=False; self.jog_stops={}; self.b210_stop=threading.Event(); self.b210_thread=None; self.events=queue.Queue(); self.event_history=[]; self.log_handle=None; self.log_writer=None; self.scan_stop=threading.Event(); self.scan_thread=None; self.scan_antenna_name=''; self.scan_axis=None; self.scan_offset_degrees=0.0; self.scan_offset_lock=threading.Lock(); self.scan_result_dialogs=[]; self.yfactor_stop=threading.Event(); self.yfactor_thread=None; self.yfactor_active=False; self.yfactor_hot_label=''; self.peak_stop=threading.Event(); self.peak_thread=None; self.tracking_nominal_az={}; self.tracking_az_comp_force={}; self.modeless_dialogs=[]; self.active_scan_antenna=''; self.active_scan_dialog=None; self.scan_resume_kind=''; self.last_user_activity=time.monotonic(); self.timeout_in_progress=False
+        self.event_log=EventLogger(Path('logs'),self.site.log_retention_days,self.site.log_level); self.state_store=AppStateStore(); self.sessions={}; self.positions={}; self.position_rate_state={}; self.cards={}; self.current_target=None; self.card_targets={}; self.tracking_kind=''; self.tracking_stop=threading.Event(); self.tracking_thread=None; self.service_stop=threading.Event(); self.service_active=False; self.park_stop=threading.Event(); self.park_active=False; self.tracking_starting=False; self.jog_stops={}; self.b210_stop=threading.Event(); self.b210_thread=None; self.events=queue.Queue(); self.event_history=[]; self.log_handle=None; self.log_writer=None; self.scan_stop=threading.Event(); self.scan_thread=None; self.scan_antenna_name=''; self.scan_axis=None; self.scan_offset_degrees=0.0; self.scan_offset_lock=threading.Lock(); self.scan_result_dialogs=[]; self.yfactor_stop=threading.Event(); self.yfactor_thread=None; self.yfactor_active=False; self.yfactor_hot_label=''; self.peak_stop=threading.Event(); self.peak_thread=None; self.tracking_nominal_az={}; self.tracking_az_comp_force={}; self.modeless_dialogs=[]; self.active_scan_antenna=''; self.active_scan_dialog=None; self.scan_resume_kind=''; self.last_user_activity=time.monotonic(); self.timeout_in_progress=False
         self.setWindowTitle(f'WT8 ANTENNA CONTROLLER {APP_VERSION}'); self.resize(1120,780); self.setMinimumSize(1080,720); self.build_ui(); self.style_ui(); self.set_status('Load config, connect antennas, then use guarded jogs.'); self.event_log.info('APP_START',version=APP_VERSION,config=str(config_path))
         QApplication.instance().installEventFilter(self)
         self.t_ref=QTimer(self); self.t_ref.timeout.connect(self.update_reference); self.t_ref.start(1000); self.t_evt=QTimer(self); self.t_evt.timeout.connect(self.process_events); self.t_evt.start(100); self.t_pos=QTimer(self); self.t_pos.timeout.connect(self.poll_positions); self.t_pos.start(1000)
@@ -724,7 +725,7 @@ class WT8App(QWidget):
             self.sessions[name]=session; self.positions[name]=pos; self.cards[name].set_position(pos); self.cards[name].set_state('STOPPED'); self.set_status(f'{name} connected. Connected {len(self.sessions)}/{len(self.configs)} antennas.')
         else: self.cards[name].set_state('FAULT'); self.set_status(f'{name} connect fault: {error}')
     def disconnect_all(self):
-        self.service_stop.set()
+        self.service_stop.set(); self.park_stop.set()
         self.stop_all(); sessions=list(self.sessions.items()); self.sessions.clear()
         def worker():
             for n,s in sessions:
@@ -742,17 +743,17 @@ class WT8App(QWidget):
             if n in self.cards: self.position_rate_state.pop(n,None); self.cards[n].set_state('STOPPED')
         self.set_status('Tracking stopped.')
     def stop_all(self):
-        self.service_stop.set(); self.tracking_stop.set(); self.tracking_nominal_az.clear(); self.tracking_az_comp_force.clear(); [ev.set() for ev in self.jog_stops.values()]
+        self.service_stop.set(); self.park_stop.set(); self.tracking_stop.set(); self.tracking_nominal_az.clear(); self.tracking_az_comp_force.clear(); [ev.set() for ev in self.jog_stops.values()]
         for n,s in list(self.sessions.items()): self.run_thread(lambda s=s:s.stop_all(),f'Stop{n}'); self.position_rate_state.pop(n,None); self.cards[n].set_state('STOPPED')
         self.set_status('Stopped.')
     def stop_antenna(self,name):
-        self.service_stop.set()
+        self.service_stop.set(); self.park_stop.set()
         self.stop_jog(name); s=self.sessions.get(name)
         if s: self.run_thread(lambda:s.stop_all(),f'Stop{name}')
         self.position_rate_state.pop(name,None)
         self.cards[name].set_state('STOPPED')
     def start_jog(self,name,direction_text):
-        if self.service_active: self.set_status('Jog rejected: Service movement active.'); return
+        if self.service_active or self.park_active: self.set_status('Jog rejected: fixed-position movement active.'); return
         s=self.sessions.get(name)
         if not s: self.set_status(f'{name} is not connected.'); return
         stop=threading.Event(); self.jog_stops[name]=stop; direction=Direction(direction_text); self.cards[name].set_state('MANUAL')
@@ -766,7 +767,7 @@ class WT8App(QWidget):
         ev=self.jog_stops.get(name)
         if ev: ev.set()
     def start_tracking(self,kind):
-        if self.service_active: self.set_status('Tracking rejected: Service movement active.'); return
+        if self.service_active or self.park_active: self.set_status('Tracking rejected: fixed-position movement active.'); return
         if not self.sessions: self.set_status('Connect antennas before tracking.'); return
         if self.tracking_starting:
             self.set_status('Tracking start already in progress.'); return
@@ -857,8 +858,8 @@ class WT8App(QWidget):
     def service_all(self):
         if not self.sessions:
             self.set_status('Connect antennas before Service.'); return
-        if self.service_active:
-            self.set_status('Service movement already active.'); return
+        if self.service_active or self.park_active:
+            self.set_status('Fixed-position movement already active.'); return
         if self.tracking_starting or any(self.cards[name].state.text() in ('MANUAL','PARKING') for name in self.sessions):
             self.set_status('Service rejected: another antenna movement is active.'); return
         if (self.scan_thread and self.scan_thread.is_alive()) or self.yfactor_active or (self.peak_thread and self.peak_thread.is_alive()):
@@ -894,14 +895,14 @@ class WT8App(QWidget):
                         if stop.is_set(): return
                         validate_service_target(session.config.limits,session.config.service_az,session.config.service_el,
                                                 self.site.az_stop_tolerance_degrees,self.site.el_stop_tolerance_degrees)
-                        session.guarded_slew_to(session.config.service_az,session.config.service_el,
-                            session.config.az_track_speed,session.config.el_track_speed,stop,
-                            self.az_tol(),self.el_tol(),self.site.az_stop_tolerance_degrees,
-                            self.site.el_stop_tolerance_degrees,self.site.az_slow_speed,self.site.el_slow_speed,
-                            self.site.az_slow_threshold_degrees,self.site.el_slow_threshold_degrees,
-                            lambda p,n=name:self.emit(lambda data:self.update_position(*data),(n,p)))
+                        precision_fixed_slew(session,session.config.service_az,session.config.service_el,
+                            stop,self.site,self.az_tol(),self.el_tol(),
+                            lambda p,n=name:self.emit(lambda data:self.update_position(*data),(n,p)),
+                            lambda **data:self.event_log.info('SERVICE_VERIFY',antenna=name,**data))
                         if not stop.is_set():
                             self.emit(lambda n:self.cards[n].set_state('SERVICE'),name)
+                    except PositionCancelled:
+                        pass
                     except Exception as exc:
                         stop.set()
                         self.emit(lambda data:self.mark_motion_exception(*data),(name,str(exc)))
@@ -923,23 +924,68 @@ class WT8App(QWidget):
         self.run_thread(worker,'Service')
 
     def park_all(self):
-        if self.service_active: self.set_status('Park rejected: Service movement active.'); return
-        if not self.sessions: self.set_status('Connect antennas before parking.'); return
-        self.tracking_stop.set(); self.tracking_kind=''; self.tracking_nominal_az.clear(); self.tracking_az_comp_force.clear(); stop=threading.Event(); sessions=list(self.sessions.items()); self.set_status('Parking antennas.')
-        for n,_s in sessions: self.cards[n].set_state('PARKING')
-        def park_one(n,s):
-            try:
-                s.config.limits.assert_position_allowed(s.config.park_az,s.config.park_el)
-                s.guarded_slew_to(s.config.park_az,s.config.park_el,s.config.az_track_speed,s.config.el_track_speed,stop,self.az_tol(),self.el_tol(),self.site.az_stop_tolerance_degrees,self.site.el_stop_tolerance_degrees,self.site.az_slow_speed,self.site.el_slow_speed,self.site.az_slow_threshold_degrees,self.site.el_slow_threshold_degrees,lambda p,n=n:self.emit(lambda data:self.update_position(*data),(n,p)))
-                if not stop.is_set(): self.emit(lambda name:self.cards[name].set_state('PARKED'),n)
-            except Exception as e: self.emit(lambda data:self.mark_motion_exception(*data),(n,str(e)))
+        if self.service_active or self.park_active:
+            self.set_status('Park rejected: fixed-position movement active.'); return
+        if not self.sessions:
+            self.set_status('Connect antennas before parking.'); return
+        if self.tracking_starting or any(self.cards[name].state.text() in ('MANUAL','SERVICING') for name in self.sessions):
+            self.set_status('Park rejected: another antenna movement is active.'); return
+        if (self.scan_thread and self.scan_thread.is_alive()) or self.yfactor_active or (self.peak_thread and self.peak_thread.is_alive()):
+            self.set_status('Park rejected: finish calibration or scan first.'); return
+        sessions=list(self.sessions.items())
+        try:
+            for name,session in sessions:
+                validate_service_target(session.config.limits,session.config.park_az,session.config.park_el,0.15,0.15)
+        except Exception as exc:
+            self.set_status(f'Park rejected before motion: {exc}'); return
+        self.park_active=True
+        self.park_stop.clear()
+        stop=self.park_stop
+        self.tracking_stop.set()
+        self.tracking_kind=''
+        self.tracking_nominal_az.clear()
+        self.tracking_az_comp_force.clear()
+        self.set_status('Parking antennas with final-position verification.')
+        for name,_session in sessions:
+            self.cards[name].set_state('PARKING')
         def worker():
-            threads=[]
-            for n,s in sessions:
-                t=threading.Thread(target=lambda n=n,s=s: park_one(n,s),name=f'Park{n}',daemon=True); threads.append(t); t.start()
-            for t in threads: t.join()
-            self.emit(lambda m:self.set_status(m),'Park complete.')
+            try:
+                tracking=self.tracking_thread
+                if tracking is not None and tracking.is_alive():
+                    tracking.join(timeout=10.0)
+                    if tracking.is_alive():
+                        self.emit(lambda msg:self.set_status(msg),'Park cancelled: tracking did not stop.')
+                        return
+                if stop.is_set(): return
+                def park_one(name,session):
+                    try:
+                        if stop.is_set(): return
+                        precision_fixed_slew(session,session.config.park_az,session.config.park_el,
+                            stop,self.site,self.az_tol(),self.el_tol(),
+                            lambda p,n=name:self.emit(lambda data:self.update_position(*data),(n,p)),
+                            lambda **data:self.event_log.info('PARK_VERIFY',antenna=name,**data))
+                        if not stop.is_set():
+                            self.emit(lambda n:self.cards[n].set_state('PARKED'),name)
+                    except PositionCancelled:
+                        pass
+                    except Exception as exc:
+                        stop.set()
+                        self.emit(lambda data:self.mark_motion_exception(*data),(name,str(exc)))
+                threads=[threading.Thread(target=park_one,args=(name,session),name=f'Park{name}',daemon=True)
+                         for name,session in sessions]
+                for thread in threads: thread.start()
+                for thread in threads: thread.join()
+                self.emit(lambda msg:self.set_status(msg),
+                          'Park complete: positions verified.' if not stop.is_set() else 'Park stopped or failed.')
+            finally:
+                def finish(_unused):
+                    for name,_session in sessions:
+                        if name in self.cards and self.cards[name].state.text() == 'PARKING':
+                            self.cards[name].set_state('STOPPED')
+                    self.park_active=False
+                self.emit(finish,None)
         self.run_thread(worker,'Park')
+
     def slew_all_to_target(self,target,activity,stop,scan_antenna=None):
         threads=[]
         for n,s in list(self.sessions.items()):
@@ -1139,7 +1185,7 @@ class WT8App(QWidget):
             row=dict(matching[-1]); row['power_value']=sum(float(r['power_value']) for r in matching)/len(matching); row['power_dbfs']=sum(float(r['power_dbfs']) for r in matching)/len(matching); row['sample_count']=sum(int(r.get('sample_count',0)) for r in matching); row['scan_number']='avg'; averaged.append(row)
         return averaged
     def start_calibration_scan(self,axis,cfg,dialog):
-        if self.service_active: self.set_status('Scan rejected: Service movement active.'); return
+        if self.service_active or self.park_active: self.set_status('Scan rejected: fixed-position movement active.'); return
         if self.scan_thread and self.scan_thread.is_alive(): dialog.set_status('Scan already running.'); return
         if not self.tracking_kind: dialog.set_status('Start tracking Sun, Moon, or Source before scanning.'); return
         try:
@@ -1296,7 +1342,7 @@ class WT8App(QWidget):
             self.emit(lambda s:dialog.set_status(s),f'Measurement {phase}: settling antenna, AZ err {az_err:+0.2f} EL err {el_err:+0.2f}.')
         raise RuntimeError(f'Y Factor {phase} did not settle within tolerance; AZ err {last.get("az_error",0.0):+0.2f} EL err {last.get("el_error",0.0):+0.2f}.')
     def start_yfactor(self,dialog,antenna,label,cold_mode,cold_az,cold_el,cold_ra,cold_dec,count,dwell,alternate):
-        if self.service_active: self.set_status('Y Factor rejected: Service movement active.'); return
+        if self.service_active or self.park_active: self.set_status('Y Factor rejected: fixed-position movement active.'); return
         if self.yfactor_active: dialog.set_status('Y Factor already running.'); return
         if antenna not in self.sessions: dialog.set_status('Connect and select an antenna before Y Factor measurement.'); return
         if self.power.current_power_measurement(antenna) is None: dialog.set_status(f"Start B210 power and wait for CH {self.power.power_channel_for_antenna(antenna)} readings before Y Factor measurement."); return
@@ -1361,7 +1407,7 @@ class WT8App(QWidget):
             result.update({'end_target_az':target.azimuth,'end_target_el':target.elevation,'end_antenna_az':pos.azimuth,'end_antenna_el':pos.elevation,'end_az_error':az_err,'end_el_error':el_err})
         return result
     def start_peak_axis_tracking(self,dialog,axis,label,antenna):
-        if self.service_active: self.set_status('Peak calibration rejected: Service movement active.'); return
+        if self.service_active or self.park_active: self.set_status('Peak calibration rejected: fixed-position movement active.'); return
         if self.peak_thread and self.peak_thread.is_alive(): dialog.set_status('Peak tracking already running.'); return
         if antenna not in self.sessions: dialog.set_status('Connect and select an antenna.'); return
         self.tracking_stop.set(); self.tracking_nominal_az.clear(); self.tracking_az_comp_force.clear(); self.peak_stop.clear(); self.peak_thread=threading.Thread(target=lambda:self.peak_axis_worker(dialog,axis,label,antenna),daemon=True); self.peak_thread.start(); dialog.set_status(f'Tracking {axis.value} only.')
