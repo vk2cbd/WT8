@@ -6,7 +6,7 @@ from wt8_ubuntu_gui import WT8App
 
 class DisconnectTests(unittest.TestCase):
     def make_app(self):
-        app=object.__new__(WT8App)
+        app=SimpleNamespace()
         app.emit=Mock()
         return app
 
