@@ -859,6 +859,8 @@ class WT8App(QWidget):
             self.set_status('Connect antennas before Service.'); return
         if self.service_active:
             self.set_status('Service movement already active.'); return
+        if self.tracking_starting or any(self.cards[name].state.text() in ('MANUAL','PARKING') for name in self.sessions):
+            self.set_status('Service rejected: another antenna movement is active.'); return
         if (self.scan_thread and self.scan_thread.is_alive()) or self.yfactor_active or (self.peak_thread and self.peak_thread.is_alive()):
             self.set_status('Service rejected: finish calibration or scan first.'); return
         sessions=list(self.sessions.items())
@@ -912,7 +914,12 @@ class WT8App(QWidget):
                 else:
                     self.emit(lambda msg:self.set_status(msg),'Service movement stopped or failed.')
             finally:
-                self.emit(lambda _unused:setattr(self,'service_active',False),None)
+                def finish(_unused):
+                    for name,_session in sessions:
+                        if name in self.cards and self.cards[name].state.text() == 'SERVICING':
+                            self.cards[name].set_state('STOPPED')
+                    self.service_active=False
+                self.emit(finish,None)
         self.run_thread(worker,'Service')
 
     def park_all(self):
