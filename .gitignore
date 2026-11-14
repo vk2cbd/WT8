@@ -16,3 +16,5 @@ power/
 # Generated Australian neural voice models and local PCM clips (not source controlled)
 voice/models/
 voice/en_AU_female/
+
+.voice-venv/
