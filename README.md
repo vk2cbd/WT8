@@ -1,5 +1,7 @@
 # WT8 — Two-antenna radio astronomy controller
 
+Current GUI version: **v0.3**.
+
 WT8 is the PyQt5 successor to WT7 v0.31 (source commit `1a42515a4f40d6dd43469572b3497d28bbf952c4`).
 The original WT7 source is preserved in the preceding WT8 migration-baseline commit `b0cb6328aeff805f6f84d46951dd500026c59c66`.
 
@@ -59,3 +61,13 @@ Hardware tests are required before operational use. The software tests do not es
 - `WT7_*.md`: archived WT7 documentation, intentionally retained under original titles
 
 The original WT7 application-description PDF remains in WT7. The GitHub connector could not transfer that binary file to WT8; refer to the WT7 repository for it.
+
+## v0.3 GUI fixed-position integration
+
+- Park and Service now display as the main SOURCE field while active and after verified arrival. The main AZ/EL target shows the common destination when both antennas agree, or `Varies` when their individual INI targets differ. Each antenna card always displays its own fixed AZ/EL target and live signed error during motion.
+- Stop Track now interrupts Park and Service as well as source tracking. It requests cancellation and issues hardware stop commands to both antennas, using the same emergency-stop pathway as STOP ALL. A cancelled move is not marked PARKED/SERVICE.
+- PARKING and SERVICING states are restored after the prior tracking worker has exited, avoiding stale tracking cleanup overwriting the movement label. SERVICING is recognised as an active motion state for rate readouts.
+- Fixed-target display is cleared when stopped or faulted; verified successful arrivals retain the destination display. Source tracking continues to use its existing astronomical target logic.
+- New headless Qt GUI tests: `tests/test_wt8_fixed_gui.py`.
+
+**Hardware safety:** Stop Track now issues stop commands for both antennas during Park/Service. Verify physical response, encoder error updates and safe cancellation under supervision before routine use. Software changes and tests have not yet been exercised on real hardware.
