@@ -44,8 +44,8 @@ class Panel(QFrame):
 class AntennaCard(Panel):
     jog_pressed=pyqtSignal(str,str); jog_released=pyqtSignal(str,str); stop_clicked=pyqtSignal(str); jog_mode_changed=pyqtSignal(str,str)
     def __init__(self,name):
-        super().__init__(); self.name=name; self.setMinimumHeight(210); self.setMaximumHeight(280); self.jog_buttons={}
-        g=QGridLayout(self); g.setContentsMargins(7,6,7,6); g.setHorizontalSpacing(10); g.setVerticalSpacing(5)
+        super().__init__(); self.name=name; self.setMinimumHeight(238); self.jog_buttons={}
+        g=QGridLayout(self); g.setContentsMargins(7,6,7,6); g.setHorizontalSpacing(14); g.setVerticalSpacing(5)
         title=bold(name.upper()); title.setObjectName('antennaTitle'); title.setMinimumWidth(72); self.state=lbl('DISCONNECTED','stateStopped'); lock_width(self.state,'DISCONNECTED',18)
         self.az=bold('--.--',18); self.el=bold('--.--',18); lock_width(self.az,'359.99',12); lock_width(self.el,'090.00',12)
         self.az_err=lbl('--.--'); self.el_err=lbl('--.--'); lock_width(self.az_err,'+999.99',10); lock_width(self.el_err,'+999.99',10)
@@ -68,8 +68,10 @@ class AntennaCard(Panel):
         telemetry.addWidget(self.az_rate,2,0,1,2); telemetry.addWidget(self.az_comp,2,2,1,2)
         telemetry.addWidget(self.el_rate,3,0,1,2); telemetry.addWidget(lbl('Target','muted'),3,2); telemetry.addWidget(self.target,3,3,1,2)
         g.addLayout(telemetry,1,0,1,1,Qt.AlignVCenter)
-        c=QWidget(); c.setObjectName('manualPad'); cg=QGridLayout(c); cg.setContentsMargins(0,0,0,0); cg.setHorizontalSpacing(6); cg.setVerticalSpacing(6)
-        mode=QHBoxLayout(); mode.setSpacing(4); mode.addWidget(bold('MANUAL CONTROL'))
+        c=QWidget(); c.setObjectName('manualPad'); c.setMinimumWidth(360)
+        cg=QGridLayout(c); cg.setContentsMargins(12,10,12,10); cg.setHorizontalSpacing(8); cg.setVerticalSpacing(6)
+        heading=bold('MANUAL CONTROL'); cg.addWidget(heading,0,0,1,3,Qt.AlignLeft)
+        mode=QHBoxLayout(); mode.setSpacing(6)
         self.manual_selector=QComboBox(); self.manual_selector.addItems(['MOMENTARY','LATCHED']); self.manual_selector.hide()
         self.mode_momentary=btn('Momentary','modeSegment'); self.mode_latched=btn('Latched','modeSegment')
         self.mode_momentary.setCheckable(True); self.mode_latched.setCheckable(True)
@@ -78,19 +80,19 @@ class AntennaCard(Panel):
         self.mode_latched.clicked.connect(lambda:self.select_manual_mode('LATCHED'))
         self.manual_selector.currentTextChanged.connect(lambda value:self.jog_mode_changed.emit(self.name,value))
         self.manual_selector.currentTextChanged.connect(self.update_manual_mode_display)
-        mode.addWidget(self.mode_momentary); mode.addWidget(self.mode_latched)
-        cg.addLayout(mode,0,0,1,3)
-        for text,direction,row,col in [('N / EL+',Direction.EL_UP.value,1,1),('W / AZ-',Direction.AZ_CCW.value,2,0),('E / AZ+',Direction.AZ_CW.value,2,2),('S / EL-',Direction.EL_DOWN.value,3,1)]:
+        mode.addStretch(1); mode.addWidget(self.mode_momentary); mode.addWidget(self.mode_latched); mode.addStretch(1)
+        cg.addLayout(mode,1,0,1,3)
+        for text,direction,row,col in [('N / EL+',Direction.EL_UP.value,2,1),('W / AZ-',Direction.AZ_CCW.value,3,0),('E / AZ+',Direction.AZ_CW.value,3,2),('S / EL-',Direction.EL_DOWN.value,4,1)]:
             b=btn(text); b.setObjectName('jogButton'); b.setFixedSize(100,34); b.setAutoRepeat(False)
             b.pressed.connect(lambda d=direction:self.jog_pressed.emit(self.name,d))
             b.released.connect(lambda d=direction:self.jog_released.emit(self.name,d))
             self.jog_buttons[direction]=b; cg.addWidget(b,row,col)
-        stop=btn('■ STOP','manualStop'); stop.setFixedSize(100,34); stop.clicked.connect(lambda:self.stop_clicked.emit(self.name)); cg.addWidget(stop,2,1)
-        self.manual_summary=lbl('● AZ: stopped    ● EL: stopped','manualSummary'); cg.addWidget(self.manual_summary,4,0,1,3)
-        self.manual_hint=lbl('Hold a direction button to move','muted'); cg.addWidget(self.manual_hint,5,0,1,3)
-        cg.setContentsMargins(12,8,12,8)
+        stop=btn('STOP','manualStop'); stop.setFixedSize(100,34); stop.clicked.connect(lambda:self.stop_clicked.emit(self.name)); cg.addWidget(stop,3,1)
+        self.manual_summary=lbl('● AZ: stopped    ● EL: stopped','manualSummary'); cg.addWidget(self.manual_summary,5,0,1,3)
+        self.manual_hint=lbl('Hold a direction button to move','muted'); cg.addWidget(self.manual_hint,6,0,1,3)
+        cg.setColumnMinimumWidth(0,100); cg.setColumnMinimumWidth(1,100); cg.setColumnMinimumWidth(2,100)
         g.addWidget(c,1,1,1,1,Qt.AlignCenter)
-        g.setColumnStretch(0,5); g.setColumnStretch(1,3); g.setColumnStretch(2,0)
+        g.setColumnStretch(0,5); g.setColumnStretch(1,0); g.setColumnStretch(2,0)
         g.setRowStretch(0,0); g.setRowStretch(1,1)
     def select_manual_mode(self,value):
         self.manual_selector.setCurrentText(value)
