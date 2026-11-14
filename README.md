@@ -86,9 +86,7 @@ Hardware tests are required before operational use. The software tests do not es
 - `wt8_service.py`: fixed Service destination preflight
 - `wt8_config.py`: INI configuration
 - `wt8_b210_power.py`: B210 power measurement
-- `docs/legacy/wt8_tk_legacy_gui.py`: archived historical Tkinter GUI reference
 - `tests/`: automated regression tests
-- `docs/legacy/WT7_*.md`: archived WT7 documentation, intentionally retained under original titles
 
 The original WT7 application-description PDF remains in WT7. The GitHub connector could not transfer that binary file to WT8; refer to the WT7 repository for it.
 
@@ -177,7 +175,6 @@ audio. A missing voice pack or `aplay` must not affect motion control.
 
 ### Historical code and documentation
 
-The former Tkinter application, WT7 design documents, and superseded Piper
-voice generator are archived in `docs/legacy/`. They are retained for
-reference but are not part of the active PyQt5 application. Do not run the
-historical Tkinter GUI against connected controllers alongside WT8.
+The former Tkinter GUI, WT7 design notes and superseded Piper generator were
+removed from the active repository in the Stage 1 cleanup. Historical versions
+remain recoverable from Git history. The active application is the PyQt5 GUI.
