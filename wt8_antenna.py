@@ -544,8 +544,8 @@ class SafeAntenna:
             self._motion_event(
                 "SLEW_EXCEPTION",
                 error=str(exc),
-                target_az=target_azimuth,
-                target_el=target_elevation,
+                target_az=None,
+                target_el=None,
                 last_az=self.last_position.azimuth if self.last_position else None,
                 last_el=self.last_position.elevation if self.last_position else None,
             )
