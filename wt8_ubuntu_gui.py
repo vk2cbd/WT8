@@ -692,6 +692,9 @@ class WT8App(QWidget):
         outer=QVBoxLayout(self); outer.setContentsMargins(0,0,0,0); outer.setSpacing(0)
         scroll=QScrollArea(self); scroll.setObjectName('dashboardScroll'); scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        # Reserve the vertical scrollbar width even when sections are collapsed.
+        # Otherwise showing/hiding a panel shifts the entire dashboard horizontally.
+        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
         content=QWidget(); content.setObjectName('dashboardContent')
         main=QVBoxLayout(content); main.setContentsMargins(10,8,10,8); main.setSpacing(6)
         scroll.setWidget(content); outer.addWidget(scroll)
@@ -856,7 +859,7 @@ class WT8App(QWidget):
             QLabel#systemIndicator[active="true"]{color:#188b47}
             QPushButton{background:#ffffff;color:#294560;border:1px solid #bfd0e1;border-radius:6px;padding:5px 11px;min-height:22px;min-width:68px;font-weight:600}
             QPushButton:hover{background:#e8f2ff;border-color:#4c95dc}
-            QPushButton:pressed{background:#c7e2ff;border:2px solid #287ac7}
+            QPushButton:pressed{background:#c7e2ff;border:1px solid #287ac7}
             QPushButton#connectAction{background:#1d9b54;color:white;border:1px solid #137a41}
             QPushButton#connectAction:hover{background:#167f44}
             QPushButton#disconnectAction{background:#435a73;color:white;border:1px solid #34465b}
@@ -868,15 +871,15 @@ class WT8App(QWidget):
             QPushButton#emergencyAction{background:#c92939;color:white;border:2px solid #a71c2a;font-weight:bold;min-width:106px}
             QPushButton#manualStop{background:#d12d3e;color:white;border:1px solid #a51d2e;font-weight:bold}
             QPushButton#jogButton{background:#f7fbff;color:#22517e;border:1px solid #8bb6e0;font-weight:bold}
-            QPushButton#jogButton[jogActive="true"]{background:#1879dc;color:white;border:2px solid #0757a7}
+            QPushButton#jogButton[jogActive="true"]{background:#1879dc;color:white;border:1px solid #0757a7}
             QPushButton#sectionToggle{text-align:left;background:#dfeaf7;color:#205487;font-weight:bold;border-radius:5px;min-height:19px;padding:4px 10px}
-            QPushButton#connectAction:pressed,QPushButton#connectAction[actionActive="true"]{background:#096b35;color:white;border:2px solid #054d25}
-            QPushButton#disconnectAction:pressed{background:#182b41;color:white;border:2px solid #101d2c}
-            QPushButton#toolAction:pressed{background:#166db8;color:white;border:2px solid #0b4c8a}
-            QPushButton#trackAction:pressed,QPushButton#trackAction[actionActive="true"]{background:#086d36;color:white;border:2px solid #044a23}
-            QPushButton#stopTrackAction:pressed{background:#172637;color:white;border:2px solid #0a1624}
-            QPushButton#serviceAction:pressed,QPushButton#serviceAction[actionActive="true"]{background:#394555;color:white;border:2px solid #1d2938}
-            QPushButton#parkAction:pressed,QPushButton#parkAction[actionActive="true"]{background:#104a94;color:white;border:2px solid #092f64}
+            QPushButton#connectAction:pressed,QPushButton#connectAction[actionActive="true"]{background:#096b35;color:white;border:1px solid #054d25}
+            QPushButton#disconnectAction:pressed{background:#182b41;color:white;border:1px solid #101d2c}
+            QPushButton#toolAction:pressed{background:#166db8;color:white;border:1px solid #0b4c8a}
+            QPushButton#trackAction:pressed,QPushButton#trackAction[actionActive="true"]{background:#086d36;color:white;border:1px solid #044a23}
+            QPushButton#stopTrackAction:pressed{background:#172637;color:white;border:1px solid #0a1624}
+            QPushButton#serviceAction:pressed,QPushButton#serviceAction[actionActive="true"]{background:#394555;color:white;border:1px solid #1d2938}
+            QPushButton#parkAction:pressed,QPushButton#parkAction[actionActive="true"]{background:#104a94;color:white;border:1px solid #092f64}
             QPushButton#emergencyAction:pressed{background:#861320;color:white;border:2px solid #5c0912}
             QPushButton#modeSegment{background:#d8e6f5;color:#24517c;border:1px solid #a8c6e4;border-radius:4px;min-width:69px;padding:4px 5px}
             QPushButton#modeSegment:checked{background:#1c70c2;color:white;border:1px solid #145394}
