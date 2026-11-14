@@ -37,11 +37,20 @@ class ManualModeTests(unittest.TestCase):
         self.app.stop_manual_axis=lambda name,axis:WT8App.stop_manual_axis(self.app,name,axis)
         self.app.manual_axis=lambda d:WT8App.manual_axis(self.app,d)
         self.app.refresh_manual_display=lambda n:WT8App.refresh_manual_display(self.app,n)
+        self.app.refresh_system_status=Mock()
     def fake_launch(self,name,axis,direction,session):
         self.app.manual_axes[(name,axis)]={'direction':direction,'stop':__import__('threading').Event()}
         self.app.refresh_manual_display(name)
     def press(self,d):
         WT8App.start_jog(self.app,'East',d.value)
+    def test_segmented_mode_selector_exclusive(self):
+        self.assertTrue(self.card.mode_momentary.isChecked())
+        self.card.select_manual_mode('LATCHED')
+        self.assertTrue(self.card.mode_latched.isChecked())
+        self.assertFalse(self.card.mode_momentary.isChecked())
+        self.card.select_manual_mode('MOMENTARY')
+        self.assertTrue(self.card.mode_momentary.isChecked())
+        self.assertFalse(self.card.mode_latched.isChecked())
     def test_latched_simultaneous_axes_and_independent_toggle(self):
         self.press(Direction.EL_UP)
         self.press(Direction.AZ_CW)
