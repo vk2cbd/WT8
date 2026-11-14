@@ -638,6 +638,8 @@ class WT8App(QWidget):
     def build_ui(self):
         main=QVBoxLayout(self); main.setContentsMargins(10,8,10,8); main.setSpacing(6)
         title=lbl(f'WT8 {APP_VERSION} — ANTENNA CONTROL & TRACKING','appTitle'); main.addWidget(title)
+        self.overview=lbl('● EAST: Disconnected     ● WEST: Disconnected     |     Source: None     |     Mode: IDLE','overview')
+        main.addWidget(self.overview)
         top1=QHBoxLayout(); top1.setSpacing(4)
         row1=[('Connect','primary',self.connect_all),('Disconnect','',self.disconnect_all),('Limits','',self.open_limits),('Observer','',self.open_observer),('Tracking','',self.open_tracking_dialog),('Sources','',self.open_sources_dialog),('Calibration','',self.open_calibration_dialog),('Peak Cal','',self.open_peak_calibration),('Scan Cal','',self.open_scan_dialog),('Y Factor','',self.open_yfactor_dialog),('Encoders','',self.open_encoders_dialog),('STOP ALL','danger',self.stop_all)]
         for text,name,cb in row1:
@@ -661,7 +663,10 @@ class WT8App(QWidget):
         self.status=lbl('')
         for name in self.configs:
             card=AntennaCard(name); card.jog_pressed.connect(self.start_jog); card.jog_released.connect(self.release_jog); card.jog_mode_changed.connect(self.change_manual_mode); card.stop_clicked.connect(self.stop_antenna); self.cards[name]=card; main.addWidget(card)
-        self.power=B210Panel(self.power_config); self.power.app=self; self.power.load_active_calibrations(self.config_path,self.power_config); self.power.start_clicked.connect(self.start_b210); self.power.stop_clicked.connect(self.stop_b210); self.power.cal_clicked.connect(self.open_b210_calibration); self.power.log_start_clicked.connect(self.start_b210_log); self.power.log_stop_clicked.connect(self.stop_b210_log); main.addWidget(self.power)
+        self.power=B210Panel(self.power_config); self.power.app=self; self.power.load_active_calibrations(self.config_path,self.power_config); self.power.start_clicked.connect(self.start_b210); self.power.stop_clicked.connect(self.stop_b210); self.power.cal_clicked.connect(self.open_b210_calibration); self.power.log_start_clicked.connect(self.start_b210_log); self.power.log_stop_clicked.connect(self.stop_b210_log)
+        self.power_toggle=btn('▸ B210 SDR POWER / CALIBRATION — Show panel'); self.power_toggle.setObjectName('sectionToggle')
+        self.power_toggle.clicked.connect(self.toggle_power_panel); main.addWidget(self.power_toggle)
+        main.addWidget(self.power); self.power.hide()
         bottom=QHBoxLayout(); bottom.setSpacing(8)
         ev=Panel(); ev.setMinimumHeight(130); eg=QGridLayout(ev); eg.setContentsMargins(9,8,9,8)
         eg.addWidget(bold('EVENT LOG'),0,0); ob=btn('Open Log'); ob.clicked.connect(self.open_log_hint); eg.addWidget(ob,0,3,Qt.AlignRight)
@@ -677,12 +682,18 @@ class WT8App(QWidget):
             widget.setWordWrap(True); sg.addWidget(widget)
         sg.addStretch(1); bottom.addWidget(status_panel,2)
         main.addLayout(bottom)
+    def toggle_power_panel(self):
+        visible=not self.power.isVisible()
+        self.power.setVisible(visible)
+        self.power_toggle.setText('▾ B210 SDR POWER / CALIBRATION — Hide panel' if visible else '▸ B210 SDR POWER / CALIBRATION — Show panel')
     def style_ui(self):
         self.setStyleSheet("""
             QWidget{background:#eef3f9;color:#1b2c40;font-family:Arial,Helvetica,sans-serif;font-size:10pt}
             QLabel{background:transparent;border:none;color:#1f252b}
             QLabel#muted{color:#8a8f95}
             QLabel#appTitle{background:#205487;color:white;font-size:14pt;font-weight:bold;padding:8px 12px;border-radius:5px}
+            QLabel#overview{background:#e2ecf8;color:#254c77;border:1px solid #c2d7ed;padding:5px 10px;font-weight:bold;border-radius:4px}
+            QPushButton#sectionToggle{text-align:left;background:#e4edf8;color:#205487;font-weight:bold;border-radius:4px;min-height:18px;padding:3px 10px}
             QLabel#antennaTitle{color:white;font-size:12pt;font-weight:bold}
             QFrame#antennaHeader{background:#205487;border-radius:4px}
             QFrame#antennaHeader QLabel{color:white}
@@ -738,6 +749,11 @@ class WT8App(QWidget):
         fixed='Parking' if self.park_active else ('Servicing' if self.service_active else '')
         self.motion_summary.setText('Motion: '+(fixed or manual or 'Stopped'))
         self.status_summary.setText(self.status.text())
+        if hasattr(self,'overview'):
+            states='     '.join(f'● {name.upper()}: '+('Connected' if name in self.sessions else 'Disconnected') for name in self.cards)
+            mode=fixed or ('MANUAL' if manual else ('TRACKING' if self.tracking_kind else 'IDLE'))
+            source=self.source_name.text() if hasattr(self,'source_name') else 'None'
+            self.overview.setText(f'{states}     |     Source: {source}     |     Mode: {mode}')
     def eventFilter(self,obj,event):
         if event.type() in (QEvent.MouseButtonPress,QEvent.KeyPress):
             self.last_user_activity=time.monotonic()
