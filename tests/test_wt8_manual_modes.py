@@ -43,6 +43,9 @@ class ManualModeTests(unittest.TestCase):
         self.app.refresh_manual_display(name)
     def press(self,d):
         WT8App.start_jog(self.app,'East',d.value)
+    def test_jog_buttons_use_axis_labels_only(self):
+        labels={button.text() for button in self.card.jog_buttons.values()}
+        self.assertEqual(labels,{'AZ+','AZ-','EL+','EL-'})
     def test_manual_controls_do_not_overlap(self):
         self.card.resize(1250,270)
         self.card.show()
