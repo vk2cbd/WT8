@@ -108,3 +108,9 @@ The development branch now uses full-width dark-blue antenna headers, grouped AZ
 The experimental branch now includes a consistent blue/green/red palette, genuine Qt standard toolbar icons, high-contrast Connect/Track/Stop/Park/Service actions, coloured antenna motion states, green SAFE badges, active manual direction highlights, two-button segmented Momentary/Latched selectors, live axis status indicators, and live system-status indicators. The B210 panel is collapsible rather than removed. LMST and the full original toolbar remain available. Changes are restricted to the development branch; the original `main` and pre-redesign backup remain unchanged.
 
 **Verification caveat:** source changes are committed but have not been visually verified against a rendered Linux GUI or physically tested on the motor controllers. Run the headless tests and inspect the GUI with controllers disconnected first.
+
+### 2026-11-14 GUI overlap repair
+
+The manual control heading, Momentary/Latched segmented selector, direction pad, axis status and help text now occupy separate grid rows. The manual pad has a minimum width and explicit directional button column widths to prevent the overlapping controls seen in the 15:09 Ubuntu screenshot. Toolbar actions are split into two grouped rows, with a separate tracking row; duplicate Unicode icon prefixes have been removed in favour of single Qt standard icons, and button widths are calculated from label text plus icon allowance (including Peak Cal). The dashboard now scrolls on smaller displays instead of clipping bottom panels. An offscreen Qt geometry regression test checks manual direction/mode button overlap.
+
+**Test status:** the changes have been committed but automated GUI tests and visual rendering have not been executed in this session. Run `QT_QPA_PLATFORM=offscreen python3 -m unittest discover -s tests -v` before any live motor testing. The `main` and backup branches remain unchanged.
