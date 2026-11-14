@@ -46,7 +46,7 @@ class AntennaCard(Panel):
     def __init__(self,name):
         super().__init__(); self.name=name; self.setMinimumHeight(180); self.setMaximumHeight(220); self.jog_buttons={}
         g=QGridLayout(self); g.setContentsMargins(10,8,10,8); g.setHorizontalSpacing(10); g.setVerticalSpacing(5)
-        title=bold(name.upper()); title.setMinimumWidth(72); self.state=lbl('DISCONNECTED','stateStopped'); lock_width(self.state,'DISCONNECTED',18)
+        title=bold(name.upper()); title.setObjectName('antennaTitle'); title.setMinimumWidth(72); self.state=lbl('DISCONNECTED','stateStopped'); lock_width(self.state,'DISCONNECTED',18)
         self.az=bold('--.--',18); self.el=bold('--.--',18); lock_width(self.az,'359.99',12); lock_width(self.el,'090.00',12)
         self.az_err=lbl('--.--'); self.el_err=lbl('--.--'); lock_width(self.az_err,'+999.99',10); lock_width(self.el_err,'+999.99',10)
         self.limits=lbl('SAFE','safe'); lock_width(self.limits,'FAULT',18); self.mode=lbl('--'); lock_width(self.mode,'Disconnected',10); self.target=lbl('--.-- / --.--'); lock_width(self.target,'359.99 / 090.00',12); self.az_comp=lbl('AZ comp --','muted'); lock_width(self.az_comp,'AZ comp +9.99',10)
@@ -654,6 +654,7 @@ class WT8App(QWidget):
             QLabel{background:transparent;border:none;color:#1f252b}
             QLabel#muted{color:#8a8f95}
             QLabel#appTitle{background:#205487;color:white;font-size:16pt;font-weight:bold;padding:10px 14px;border-radius:6px}
+            QLabel#antennaTitle{color:#205487;font-size:12pt;font-weight:bold}
             QLabel#bold{font-weight:700}
             QFrame#panel{background:#f9fbff;border:1px solid #c5d7ea;border-radius:7px}
             QPushButton{background:#fff;color:#111820;border:1px solid #cfd3d6;border-radius:8px;padding:4px 10px;min-height:20px;min-width:62px}
@@ -844,6 +845,11 @@ class WT8App(QWidget):
         directions=[entry['direction'] for (n,_),entry in self.manual_axes.items() if n==name]
         card.set_manual_active(directions)
         if not directions and card.state.text().startswith('MANUAL'): card.set_state('STOPPED')
+        if any(self.manual_axes):
+            self.source_name.setText('Manual Control')
+            self.source_az.setText('--.--'); self.source_el.setText('--.--'); self.source_ha.setText('--')
+        elif self.source_name.text()=='Manual Control':
+            self.source_name.setText('Target --')
     def stop_manual_axis(self,name,axis):
         key=(name,axis)
         self.manual_pending.pop(key,None)
