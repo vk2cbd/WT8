@@ -757,16 +757,42 @@ class WT8App(QWidget):
             button.setMinimumWidth(max(92,button.fontMetrics().horizontalAdvance(label)+48))
             top2.addWidget(button)
         top2.addStretch(1); main.addLayout(top2)
-        header=QHBoxLayout(); header.setSpacing(8)
-        src=Panel(); sr=QGridLayout(src); sr.setContentsMargins(8,7,8,7); sr.setHorizontalSpacing(12); sr.setVerticalSpacing(6)
-        sr.addWidget(bold('SOURCE'),0,0); self.source_name=lbl('Target --'); lock_width(self.source_name,'Omega Neb M17',12); sr.addWidget(self.source_name,0,1)
-        sr.addWidget(lbl('AZ','muted'),0,2); self.source_az=bold('--.--',14); lock_width(self.source_az,'359.99',12); sr.addWidget(self.source_az,0,3)
-        sr.addWidget(lbl('EL','muted'),0,4); self.source_el=bold('--.--',14); lock_width(self.source_el,'-90.00',12); sr.addWidget(self.source_el,0,5)
-        sr.addWidget(lbl('HA','muted'),0,6); self.source_ha=bold('--:--',14); lock_width(self.source_ha,'-12:00',12); sr.addWidget(self.source_ha,0,7)
-        self.sun=bold('SUN AZ --.-- EL --.--'); self.moon=bold('MOON AZ --.-- EL --.--'); lock_width(self.sun,'SUN AZ 359.99 EL -90.00',12); lock_width(self.moon,'MOON AZ 359.99 EL -90.00',12); sr.addWidget(self.sun,1,0,1,2); sr.addWidget(self.moon,1,2,1,5)
-        self.timeout_label=lbl('Timeout off'); lock_width(self.timeout_label,'Timeout 999:59 to disconnect',10); sr.addWidget(self.timeout_label,2,0,1,7)
-        ref=Panel(); ref.setMaximumWidth(260); rg=QGridLayout(ref); rg.setContentsMargins(8,7,8,7); rg.setVerticalSpacing(6); self.local=lbl('Local --'); self.utc=lbl('UTC --'); self.lmst=lbl('LMST --'); lock_width(self.local,'Local 2026-07-18 20:42:18 AEST',10); lock_width(self.utc,'UTC 2026-07-18 10:42:18',10); lock_width(self.lmst,'LMST 16:35:51',10); rg.addWidget(self.local,0,0); rg.addWidget(self.utc,1,0); rg.addWidget(self.lmst,2,0)
-        header.addWidget(src,3); header.addWidget(ref,1); main.addLayout(header)
+        # Compact source / Sun / Moon / clock dashboard.
+        # Keep existing label attributes: periodic update logic writes to them.
+        header_panel=Panel()
+        hg=QGridLayout(header_panel); hg.setContentsMargins(10,6,10,5)
+        hg.setHorizontalSpacing(10); hg.setVerticalSpacing(4)
+        def astro_group(title):
+            panel=QFrame(); panel.setObjectName('astroGroup')
+            layout=QGridLayout(panel); layout.setContentsMargins(8,4,8,4)
+            layout.setHorizontalSpacing(5); layout.setVerticalSpacing(2)
+            heading=lbl(title,'astroHeading'); layout.addWidget(heading,0,0,1,4)
+            return panel,layout
+        src,sg=astro_group('SELECTED SOURCE')
+        self.source_name=bold('Target --',10); sg.addWidget(self.source_name,1,0,1,4)
+        sg.addWidget(lbl('AZ','muted'),2,0)
+        self.source_az=bold('--.--',11); sg.addWidget(self.source_az,2,1)
+        sg.addWidget(lbl('EL','muted'),2,2)
+        self.source_el=bold('--.--',11); sg.addWidget(self.source_el,2,3)
+        sg.addWidget(lbl('HA','muted'),3,0)
+        self.source_ha=lbl('--:--'); sg.addWidget(self.source_ha,3,1,1,3)
+        sun_panel,sung=astro_group('SUN')
+        self.sun=lbl('SUN AZ --.-- EL --.--')
+        sung.addWidget(self.sun,1,0,1,4)
+        moon_panel,moong=astro_group('MOON')
+        self.moon=lbl('MOON AZ --.-- EL --.--')
+        moong.addWidget(self.moon,1,0,1,4)
+        clock,cg=astro_group('OBSERVATORY TIME')
+        self.local=lbl('Local --'); self.utc=lbl('UTC --'); self.lmst=lbl('LMST --')
+        cg.addWidget(self.local,1,0,1,4)
+        cg.addWidget(self.utc,2,0,1,4)
+        cg.addWidget(self.lmst,3,0,1,4)
+        for col,(panel,stretch) in enumerate(((src,3),(sun_panel,2),(moon_panel,2),(clock,3))):
+            hg.addWidget(panel,0,col)
+            hg.setColumnStretch(col,stretch)
+        self.timeout_label=lbl('Timeout off','muted')
+        hg.addWidget(self.timeout_label,1,0,1,4)
+        main.addWidget(header_panel)
         self.status=lbl('')
         for name in self.configs:
             card=AntennaCard(name); card.set_controller_config(self.configs[name]); card.jog_pressed.connect(self.start_jog); card.jog_released.connect(self.release_jog); card.jog_mode_changed.connect(self.change_manual_mode); card.stop_clicked.connect(self.stop_antenna); card.state_changed.connect(self.announce_antenna_state); self.cards[name]=card; main.addWidget(card)
@@ -810,6 +836,8 @@ class WT8App(QWidget):
             QFrame#antennaHeader QLabel#stateBusy{background:#1678d1;color:white;border:1px solid #77b9f0;border-radius:4px;padding:5px 10px}
             QFrame#antennaHeader QLabel#stateGood{background:#1f994e;color:white;border:1px solid #80c89b;border-radius:4px;padding:5px 10px}
             QFrame#antennaHeader QLabel#stateFault{background:#c92d3e;color:white;border:1px solid #e99ca3;border-radius:4px;padding:5px 10px}
+            QFrame#astroGroup{background:#f5f9fd;border:1px solid #d8e4ef;border-radius:5px}
+            QLabel#astroHeading{font-weight:bold;color:#38628e;font-size:9pt}
             QFrame#panel{background:#ffffff;border:1px solid #c7d8e9;border-radius:7px}
             QWidget#manualPad{background:#e6f0fc;border:1px solid #b8d0eb;border-radius:7px}
             QWidget#manualPad QLabel#bold{color:#174a80;font-weight:bold}
