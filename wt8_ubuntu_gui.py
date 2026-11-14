@@ -540,7 +540,7 @@ class StellariumDialog(SimpleDialog):
         # as decimal DEGREES, not hours or sexagesimal strings.
         if isinstance(ra,(int,float)) and not isinstance(ra,bool) and isinstance(dec,(int,float)) and not isinstance(dec,bool):
             ra_deg=float(ra); dec_deg=float(dec)
-            if not math.isfinite(ra_deg) or not math.isfinite(dec_deg) or not 0<=ra_deg<=360 or not -90<=dec_deg<=90:
+            if not math.isfinite(ra_deg) or not math.isfinite(dec_deg) or not -360<=ra_deg<=360 or not -90<=dec_deg<=90:
                 raise ValueError('J2000 coordinates outside valid range')
             return SourceConfig(name,(ra_deg/15.0)%24,dec_deg,0.0)
         if not isinstance(ra,str) or not isinstance(dec,str):
