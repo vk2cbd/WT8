@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Optional
 from PyQt5.QtCore import Qt, QSize, QTimer, pyqtSignal, QEvent
 from PyQt5.QtGui import QFont, QPainter, QPen, QColor
-from PyQt5.QtWidgets import QApplication, QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFrame, QGridLayout, QHBoxLayout, QLabel, QLineEdit, QMessageBox, QPlainTextEdit, QPushButton, QTabWidget, QTableWidget, QTableWidgetItem, QToolTip, QVBoxLayout, QWidget
+from PyQt5.QtWidgets import QApplication, QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFrame, QGridLayout, QHBoxLayout, QLabel, QLineEdit, QMessageBox, QPlainTextEdit, QPushButton, QStyle, QTabWidget, QTableWidget, QTableWidgetItem, QToolTip, QVBoxLayout, QWidget
 from wt8_antenna import Axis, Direction, Position, SafeAntenna, shortest_angle_delta
 from wt8_astro import TargetPosition, local_sidereal_time, moon_equatorial, moon_position, source_position
 from wt8_b210_power import B210PowerMeter, B210PowerMeterConfig, B210PowerReading
@@ -660,12 +660,18 @@ class WT8App(QWidget):
         top1=QHBoxLayout(); top1.setSpacing(5)
         row1=[('● Connect','connectAction',self.connect_all),('⏻ Disconnect','disconnectAction',self.disconnect_all),('⚙ Limits','toolAction',self.open_limits),('◎ Observer','toolAction',self.open_observer),('⌖ Tracking','toolAction',self.open_tracking_dialog),('★ Sources','toolAction',self.open_sources_dialog),('◈ Calibration','toolAction',self.open_calibration_dialog),('⌁ Peak Cal','toolAction',self.open_peak_calibration),('▦ Scan Cal','toolAction',self.open_scan_dialog),('◉ Y Factor','toolAction',self.open_yfactor_dialog),('≡ Encoders','toolAction',self.open_encoders_dialog),('■ STOP ALL','emergencyAction',self.stop_all)]
         for text,name,cb in row1:
-            b=btn(text,name); b.clicked.connect(cb); top1.addWidget(b)
+            b=btn(text,name); b.clicked.connect(cb)
+            icon_name={'connectAction':'SP_DialogApplyButton','disconnectAction':'SP_DialogCancelButton','toolAction':'SP_FileDialogDetailedView','emergencyAction':'SP_MessageBoxCritical'}.get(name)
+            if icon_name: b.setIcon(self.style().standardIcon(getattr(QStyle,icon_name)))
+            top1.addWidget(b)
         top1.addStretch(1); main.addLayout(top1)
         top2=QHBoxLayout(); top2.setSpacing(4)
         row2=[('▶ Track Sun','trackAction',lambda:self.start_tracking('sun')),('▶ Track Moon','trackAction',lambda:self.start_tracking('moon')),('▶ Track Source','trackAction',lambda:self.start_tracking('source')),('■ Stop Track','stopTrackAction',self.stop_tracking),('⚒ Service','serviceAction',self.service_all),('P Park','parkAction',self.park_all)]
         for text,name,cb in row2:
-            b=btn(text,name); b.clicked.connect(cb); top2.addWidget(b)
+            b=btn(text,name); b.clicked.connect(cb)
+            icon_name={'trackAction':'SP_MediaPlay','stopTrackAction':'SP_MediaStop','serviceAction':'SP_FileDialogContentsView','parkAction':'SP_DialogSaveButton'}.get(name)
+            if icon_name: b.setIcon(self.style().standardIcon(getattr(QStyle,icon_name)))
+            top2.addWidget(b)
         top2.addStretch(1); main.addLayout(top2)
         header=QHBoxLayout(); header.setSpacing(8)
         src=Panel(); sr=QGridLayout(src); sr.setContentsMargins(8,7,8,7); sr.setHorizontalSpacing(12); sr.setVerticalSpacing(6)
