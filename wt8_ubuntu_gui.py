@@ -59,8 +59,8 @@ class AzimuthCompass(QWidget):
         super().__init__(parent)
         self.actual=None
         self.target=None
-        self.setMinimumSize(130, 130)
-        self.setMaximumWidth(175)
+        self.setMinimumSize(170, 170)
+        self.setMaximumWidth(195)
         self.setToolTip('Cyan: measured antenna azimuth; yellow: commanded target azimuth')
 
     def set_actual(self, degrees):
@@ -76,26 +76,25 @@ class AzimuthCompass(QWidget):
         p.setRenderHint(QPainter.Antialiasing)
         side=min(self.width(),self.height())
         p.translate(self.width()/2,self.height()/2)
-        p.scale(side/160,side/160)
+        p.scale(side/180,side/180)
         p.setBrush(Qt.NoBrush)
         p.setPen(QPen(QColor('#243956'),1.6))
-        p.drawEllipse(QPointF(0,0),57,57)
+        p.drawEllipse(QPointF(0,0),62,62)
         for a in range(0,360,30):
             theta=math.radians(a)
-            r1=48 if a%90==0 else 52
+            r1=52 if a%90==0 else 56
             p.drawLine(QPointF(r1*math.sin(theta),-r1*math.cos(theta)),
-                       QPointF(57*math.sin(theta),-57*math.cos(theta)))
-        # Bearings are clockwise from north, matching WT8 encoder azimuth.
-        # Place eight labels outside the dial, with cardinal directions retained.
+                       QPointF(62*math.sin(theta),-62*math.cos(theta)))
+        # Label every actual 30-degree tick. Cardinal directions replace the
+        # numeric labels at 0/90/180/270 so each mark is unambiguous.
         p.setPen(QColor('#243956'))
-        font=p.font(); font.setBold(True); font.setPointSize(8); p.setFont(font)
-        bearings={0:'N 0°',45:'45°',90:'E 90°',135:'135°',
-                  180:'S 180°',225:'225°',270:'W 270°',315:'315°'}
+        font=p.font(); font.setBold(True); font.setPointSize(9); p.setFont(font)
         metrics=p.fontMetrics()
-        for bearing,label in bearings.items():
+        for bearing in range(0,360,30):
+            label={0:'N',90:'E',180:'S',270:'W'}.get(bearing,f'{bearing}°')
             theta=math.radians(bearing)
-            x=70*math.sin(theta)
-            y=-70*math.cos(theta)
+            x=77*math.sin(theta)
+            y=-77*math.cos(theta)
             p.drawText(QPointF(x-metrics.horizontalAdvance(label)/2,
                                y+(metrics.ascent()-metrics.descent())/2),label)
         def hand(degrees,color,length,width):
@@ -107,8 +106,8 @@ class AzimuthCompass(QWidget):
             p.drawLine(QPointF(0,0),tip)
             p.setPen(Qt.NoPen); p.setBrush(QColor(color))
             p.drawEllipse(tip,3.5,3.5)
-        hand(self.target,'#e4b500',45,4)
-        hand(self.actual,'#00b9c9',39,4)
+        hand(self.target,'#e4b500',49,4)
+        hand(self.actual,'#00b9c9',43,4)
         p.setPen(Qt.NoPen)
         p.setBrush(QColor('#00b9c9') if self.actual is not None else QColor('#9aa6b2'))
         p.drawEllipse(QPointF(0,0),4,4)
