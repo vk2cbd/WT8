@@ -2182,5 +2182,10 @@ class WT8App(QWidget):
 def parse_args():
     p=argparse.ArgumentParser(description='Launch WT8 PyQt5 antenna GUI.'); p.add_argument('--config',default='wt8_ubuntu.ini',help='Config file. Default: wt8_ubuntu.ini'); return p.parse_args()
 def main():
-    args=parse_args(); app=QApplication([])\n    app.setApplicationName('WT8')\n    app.setApplicationDisplayName('WT8')\n    app.setOrganizationName('WT8')\n    app.setDesktopFileName('wt8')\n    w=WT8App(args.config); w.show(); return app.exec_()
+    args=parse_args(); app=QApplication([])
+    app.setApplicationName('WT8')
+    app.setApplicationDisplayName('WT8')
+    app.setOrganizationName('WT8')
+    app.setDesktopFileName('wt8')
+    w=WT8App(args.config); w.show(); return app.exec_()
 if __name__=='__main__': raise SystemExit(main())
