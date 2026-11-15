@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 from PyQt5.QtCore import Qt, QSize, QPointF, QTimer, pyqtSignal, QEvent, QSettings
-from PyQt5.QtGui import QFont, QPainter, QPen, QColor, QBrush, QPolygonF
+from PyQt5.QtGui import QFont, QPainter, QPen, QColor
 from PyQt5.QtWidgets import QApplication, QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFrame, QGridLayout, QHBoxLayout, QLabel, QLineEdit, QMessageBox, QPlainTextEdit, QPushButton, QScrollArea, QSlider, QStyle, QTabWidget, QTableWidget, QTableWidgetItem, QToolTip, QVBoxLayout, QWidget
 from wt8_antenna import Axis, Direction, Position, SafeAntenna, shortest_angle_delta
 from wt8_astro import TargetPosition, local_sidereal_time, moon_equatorial, moon_position, source_position
@@ -199,7 +199,8 @@ class AntennaCard(Panel):
             button.style().unpolish(button); button.style().polish(button)
         if directions and self.state.text()!='FAULT': self.set_state('MANUAL '+ ' + '.join(labels[d] for d in directions))
     def set_position(self,pos: Optional[Position]):
-        self.az.setText('--.--' if pos is None else f'{pos.azimuth:06.2f}'); self.el.setText('--.--' if pos is None else f'{pos.elevation:05.2f}')\n        self.compass.set_actual(None if pos is None else pos.azimuth)
+        self.az.setText('--.--' if pos is None else f'{pos.azimuth:06.2f}'); self.el.setText('--.--' if pos is None else f'{pos.elevation:05.2f}')
+        self.compass.set_actual(None if pos is None else pos.azimuth)
     def set_rates(self,az_rate: Optional[float], el_rate: Optional[float]):
         self.az_rate.setText('--.-- °/s' if az_rate is None else f'{az_rate:+0.2f} °/s')
         self.el_rate.setText('--.-- °/s' if el_rate is None else f'{el_rate:+0.2f} °/s')
