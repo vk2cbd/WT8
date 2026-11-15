@@ -85,10 +85,19 @@ class AzimuthCompass(QWidget):
             r1=48 if a%90==0 else 52
             p.drawLine(QPointF(r1*math.sin(theta),-r1*math.cos(theta)),
                        QPointF(57*math.sin(theta),-57*math.cos(theta)))
+        # Bearings are clockwise from north, matching WT8 encoder azimuth.
+        # Place eight labels outside the dial, with cardinal directions retained.
         p.setPen(QColor('#243956'))
-        font=p.font(); font.setBold(True); font.setPointSize(11); p.setFont(font)
-        for label,x,y in [('N',0,-68),('E',68,4),('S',0,73),('W',-68,4)]:
-            p.drawText(QPointF(x-6,y),label)
+        font=p.font(); font.setBold(True); font.setPointSize(8); p.setFont(font)
+        bearings={0:'N 0°',45:'45°',90:'E 90°',135:'135°',
+                  180:'S 180°',225:'225°',270:'W 270°',315:'315°'}
+        metrics=p.fontMetrics()
+        for bearing,label in bearings.items():
+            theta=math.radians(bearing)
+            x=70*math.sin(theta)
+            y=-70*math.cos(theta)
+            p.drawText(QPointF(x-metrics.horizontalAdvance(label)/2,
+                               y+(metrics.ascent()-metrics.descent())/2),label)
         def hand(degrees,color,length,width):
             if degrees is None:
                 return
