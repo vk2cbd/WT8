@@ -7,8 +7,8 @@ from urllib.request import urlopen
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
-from PyQt5.QtCore import Qt, QSize, QTimer, pyqtSignal, QEvent, QSettings
-from PyQt5.QtGui import QFont, QPainter, QPen, QColor
+from PyQt5.QtCore import Qt, QSize, QPointF, QTimer, pyqtSignal, QEvent, QSettings
+from PyQt5.QtGui import QFont, QPainter, QPen, QColor, QBrush, QPolygonF
 from PyQt5.QtWidgets import QApplication, QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFrame, QGridLayout, QHBoxLayout, QLabel, QLineEdit, QMessageBox, QPlainTextEdit, QPushButton, QScrollArea, QSlider, QStyle, QTabWidget, QTableWidget, QTableWidgetItem, QToolTip, QVBoxLayout, QWidget
 from wt8_antenna import Axis, Direction, Position, SafeAntenna, shortest_angle_delta
 from wt8_astro import TargetPosition, local_sidereal_time, moon_equatorial, moon_position, source_position
@@ -53,6 +53,58 @@ def lock_width(widget, sample: str, pad: int = 10):
 RATE_MIN_INTERVAL_SECONDS = 0.15
 class Panel(QFrame):
     def __init__(self): super().__init__(); self.setObjectName('panel'); self.setFrameShape(QFrame.StyledPanel)
+class AzimuthCompass(QWidget):
+    """Read-only azimuth dial: cyan encoder and yellow target, north up."""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.actual=None
+        self.target=None
+        self.setMinimumSize(130, 130)
+        self.setMaximumWidth(175)
+        self.setToolTip('Cyan: measured antenna azimuth; yellow: commanded target azimuth')
+
+    def set_actual(self, degrees):
+        self.actual=degrees if degrees is not None and math.isfinite(degrees) else None
+        self.update()
+
+    def set_target(self, degrees):
+        self.target=degrees if degrees is not None and math.isfinite(degrees) else None
+        self.update()
+
+    def paintEvent(self, event):
+        p=QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        side=min(self.width(),self.height())
+        p.translate(self.width()/2,self.height()/2)
+        p.scale(side/160,side/160)
+        p.setBrush(Qt.NoBrush)
+        p.setPen(QPen(QColor('#243956'),1.6))
+        p.drawEllipse(QPointF(0,0),57,57)
+        for a in range(0,360,30):
+            theta=math.radians(a)
+            r1=48 if a%90==0 else 52
+            p.drawLine(QPointF(r1*math.sin(theta),-r1*math.cos(theta)),
+                       QPointF(57*math.sin(theta),-57*math.cos(theta)))
+        p.setPen(QColor('#243956'))
+        font=p.font(); font.setBold(True); font.setPointSize(11); p.setFont(font)
+        for label,x,y in [('N',0,-68),('E',68,4),('S',0,73),('W',-68,4)]:
+            p.drawText(QPointF(x-6,y),label)
+        def hand(degrees,color,length,width):
+            if degrees is None:
+                return
+            theta=math.radians(degrees%360)
+            tip=QPointF(length*math.sin(theta),-length*math.cos(theta))
+            p.setPen(QPen(QColor(color),width,Qt.SolidLine,Qt.RoundCap))
+            p.drawLine(QPointF(0,0),tip)
+            p.setPen(Qt.NoPen); p.setBrush(QColor(color))
+            p.drawEllipse(tip,3.5,3.5)
+        hand(self.target,'#e4b500',45,4)
+        hand(self.actual,'#00b9c9',39,4)
+        p.setPen(Qt.NoPen)
+        p.setBrush(QColor('#00b9c9') if self.actual is not None else QColor('#9aa6b2'))
+        p.drawEllipse(QPointF(0,0),4,4)
+        p.end()
+
 class AntennaCard(Panel):
     jog_pressed=pyqtSignal(str,str); jog_released=pyqtSignal(str,str); stop_clicked=pyqtSignal(str); jog_mode_changed=pyqtSignal(str,str); state_changed=pyqtSignal(str,str)
     def __init__(self,name):
@@ -77,13 +129,19 @@ class AntennaCard(Panel):
             layout.addWidget(title,0,0,1,2)
             layout.setColumnStretch(1,1)
             return panel,layout
-        current,current_grid=group('CURRENT POSITION')
-        current_grid.addWidget(lbl('AZ','muted'),1,0); current_grid.addWidget(self.az,1,1)
-        current_grid.addWidget(lbl('EL','muted'),2,0); current_grid.addWidget(self.el,2,1)
-        current_grid.addWidget(lbl('AZ rate','muted'),3,0)
-        current_grid.addWidget(self.az_rate,3,1)
-        current_grid.addWidget(lbl('EL rate','muted'),4,0)
-        current_grid.addWidget(self.el_rate,4,1)
+        current=QFrame(); current.setObjectName('telemetryGroup')
+        current_layout=QHBoxLayout(current)
+        current_layout.setContentsMargins(8,6,8,6)
+        current_layout.setSpacing(8)
+        self.compass=AzimuthCompass()
+        current_layout.addWidget(self.compass,0,Qt.AlignVCenter)
+        readings=QGridLayout(); readings.setContentsMargins(0,0,0,0)
+        readings.setHorizontalSpacing(6); readings.setVerticalSpacing(5)
+        for row,title,value in [(0,'AZ',self.az),(1,'EL',self.el),
+                                (2,'AZ rate',self.az_rate),(3,'EL rate',self.el_rate)]:
+            readings.addWidget(lbl(title,'muted'),row,0)
+            readings.addWidget(value,row,1)
+        current_layout.addLayout(readings,1)
         target_panel,target_grid=group('TARGET & ERROR')
         self.target_az_display=lbl('--.--'); self.target_el_display=lbl('--.--')
         target_grid.addWidget(lbl('Target AZ','muted'),1,0); target_grid.addWidget(self.target_az_display,1,1)
@@ -141,11 +199,12 @@ class AntennaCard(Panel):
             button.style().unpolish(button); button.style().polish(button)
         if directions and self.state.text()!='FAULT': self.set_state('MANUAL '+ ' + '.join(labels[d] for d in directions))
     def set_position(self,pos: Optional[Position]):
-        self.az.setText('--.--' if pos is None else f'{pos.azimuth:06.2f}'); self.el.setText('--.--' if pos is None else f'{pos.elevation:05.2f}')
+        self.az.setText('--.--' if pos is None else f'{pos.azimuth:06.2f}'); self.el.setText('--.--' if pos is None else f'{pos.elevation:05.2f}')\n        self.compass.set_actual(None if pos is None else pos.azimuth)
     def set_rates(self,az_rate: Optional[float], el_rate: Optional[float]):
         self.az_rate.setText('--.-- °/s' if az_rate is None else f'{az_rate:+0.2f} °/s')
         self.el_rate.setText('--.-- °/s' if el_rate is None else f'{el_rate:+0.2f} °/s')
     def set_target(self,target: Optional[TargetPosition], pos: Optional[Position], az_comp: Optional[float] = None):
+        self.compass.set_target(None if target is None else target.azimuth)
         if not target:
             self.target_az_display.setText('--.--'); self.target_el_display.setText('--.--')
             self.target.setText('--.-- / --.--'); self.az_err.setText('--.--'); self.el_err.setText('--.--'); self.az_comp.setText('AZ comp --'); return
