@@ -2,7 +2,7 @@
 #!/usr/bin/env python3
 """WT8 PyQt5 antenna controller GUI."""
 from __future__ import annotations
-import argparse, csv, json, math, queue, re, threading, time
+import argparse, csv, json, math, queue, re, subprocess, threading, time
 from urllib.request import urlopen
 from datetime import datetime, timezone
 from pathlib import Path
@@ -21,7 +21,22 @@ from wt8_service import validate_service_target
 from wt8_precision import precision_fixed_slew, PositionCancelled
 from wt8_voice import VoiceAnnunciator
 from wt8_stellarium_feedback import StellariumFeedback
-APP_VERSION = "v0.4-dev"
+APP_VERSION = "v0.5-dev-2"
+
+def application_version():
+    """Display the checked-out revision, without requiring Git to launch WT8."""
+    try:
+        root=Path(__file__).resolve().parent
+        result=subprocess.run(
+            ['git','-C',str(root),'rev-parse','--short=7','HEAD'],
+            capture_output=True,text=True,timeout=2,check=True)
+        revision=result.stdout.strip()
+        if revision:
+            return f'{APP_VERSION} ({revision})'
+    except (OSError, subprocess.SubprocessError):
+        pass
+    return APP_VERSION
+
 
 def serial_port_display(port: str) -> str:
     """Show the Linux tty name for persistent /dev/serial/by-id links."""
@@ -890,7 +905,7 @@ class WT8App(QWidget):
         self.saved_voice_volume=max(0,min(100,self.voice_settings.value('voice/volume',70,type=int)))
         self._voice_state_versions={}
         self._voice_suppress_connect_stop=set()
-        self.setWindowTitle(f'WT8 — Antenna Control & Tracking {APP_VERSION}'); self.resize(1380,920); self.setMinimumSize(1250,880); self.build_ui(); self.style_ui(); self.set_status('Load config, connect antennas, then use guarded jogs.'); self.event_log.info('APP_START',version=APP_VERSION,config=str(config_path))
+        self.setWindowTitle(f'WT8 — Antenna Control & Tracking {application_version()}'); self.resize(1380,920); self.setMinimumSize(1250,880); self.build_ui(); self.style_ui(); self.set_status('Load config, connect antennas, then use guarded jogs.'); self.event_log.info('APP_START',version=APP_VERSION,config=str(config_path))
         QApplication.instance().installEventFilter(self)
         self.t_ref=QTimer(self); self.t_ref.timeout.connect(self.update_reference); self.t_ref.start(1000); self.t_evt=QTimer(self); self.t_evt.timeout.connect(self.process_events); self.t_evt.start(100); self.t_pos=QTimer(self); self.t_pos.timeout.connect(self.poll_positions); self.t_pos.start(1000)
     def build_ui(self):
@@ -903,7 +918,7 @@ class WT8App(QWidget):
         content=QWidget(); content.setObjectName('dashboardContent')
         main=QVBoxLayout(content); main.setContentsMargins(10,8,10,8); main.setSpacing(6)
         scroll.setWidget(content); outer.addWidget(scroll)
-        title=lbl(f'WT8 {APP_VERSION} — ANTENNA CONTROL & TRACKING','appTitle'); main.addWidget(title)
+        title=lbl(f'WT8 {application_version()} — ANTENNA CONTROL & TRACKING','appTitle'); main.addWidget(title)
         self.overview=lbl('● EAST: Disconnected     ● WEST: Disconnected     |     Source: None     |     Mode: IDLE','overview')
         main.addWidget(self.overview)
         voice_row=QHBoxLayout(); voice_row.setSpacing(8)
@@ -2167,5 +2182,5 @@ class WT8App(QWidget):
 def parse_args():
     p=argparse.ArgumentParser(description='Launch WT8 PyQt5 antenna GUI.'); p.add_argument('--config',default='wt8_ubuntu.ini',help='Config file. Default: wt8_ubuntu.ini'); return p.parse_args()
 def main():
-    args=parse_args(); app=QApplication([]); w=WT8App(args.config); w.show(); return app.exec_()
+    args=parse_args(); app=QApplication([])\n    app.setApplicationName('WT8')\n    app.setApplicationDisplayName('WT8')\n    app.setOrganizationName('WT8')\n    app.setDesktopFileName('wt8')\n    w=WT8App(args.config); w.show(); return app.exec_()
 if __name__=='__main__': raise SystemExit(main())
