@@ -21,7 +21,7 @@ from wt8_service import validate_service_target
 from wt8_precision import precision_fixed_slew, PositionCancelled
 from wt8_voice import VoiceAnnunciator
 from wt8_stellarium_feedback import StellariumFeedback
-APP_VERSION = "v0.5-dev-2"
+APP_VERSION = "v0.5"
 
 def application_version():
     """Display the checked-out revision, without requiring Git to launch WT8."""
