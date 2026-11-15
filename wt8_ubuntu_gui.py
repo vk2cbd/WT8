@@ -139,7 +139,7 @@ class AntennaCard(Panel):
         self.limits=lbl('SAFE','safe'); lock_width(self.limits,'FAULT',18); self.mode=lbl('--'); lock_width(self.mode,'Disconnected',10); self.target=lbl('--.-- / --.--'); lock_width(self.target,'359.99 / 090.00',12); self.az_comp=lbl('AZ comp --','muted'); lock_width(self.az_comp,'AZ comp +9.99',10)
         self.az_rate=lbl('--.-- °/s','muted'); self.el_rate=lbl('--.-- °/s','muted')
         head=QFrame(); head.setObjectName('antennaHeader'); hl=QHBoxLayout(head); hl.setContentsMargins(10,3,10,3)
-        hl.addWidget(title); hl.addStretch(1); hl.addWidget(self.state)
+        hl.addWidget(title); hl.addWidget(self.state); hl.addStretch(1)
         g.addWidget(head,0,0,1,3)
         # Three equal-purpose telemetry columns make use of the full available
         # left-hand area while retaining the existing manual jog pad at right.
