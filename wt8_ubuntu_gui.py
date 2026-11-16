@@ -668,7 +668,7 @@ class StellariumDialog(SimpleDialog):
                         with urlopen('http://127.0.0.1:8090/api/objects/info',timeout=3) as response:
                             info_html=response.read(65537)
                         if len(info_html)<=65536:
-                            match=re.search(r'<h2\\b[^>]*>(.*?)</h2>',info_html.decode('utf-8'),re.I|re.S)
+                            match=re.search(r'<h2\b[^>]*>(.*?)</h2>',info_html.decode('utf-8'),re.I|re.S)
                             if match:
                                 display_name=html.unescape(re.sub(r'<[^>]*>','',match.group(1))).strip()
                                 if 0<len(display_name)<=100:
