@@ -21,7 +21,7 @@ from wt8_service import validate_service_target
 from wt8_precision import precision_fixed_slew, PositionCancelled
 from wt8_voice import VoiceAnnunciator
 from wt8_stellarium_feedback import StellariumFeedback
-APP_VERSION = "v0.5"
+APP_VERSION = "v0.5.1"
 
 def application_version():
     """Display the checked-out revision, without requiring Git to launch WT8."""
@@ -617,21 +617,30 @@ class StellariumDialog(SimpleDialog):
         dec=data.get('decJ2000')
         if ra is None or dec is None:
             raise ValueError('Selected object lacks raJ2000/decJ2000 fields; inspect raw response below')
-        name=str(data.get('name') or data.get('englishName') or data.get('localizedName') or '').strip()
-        if not name or len(name)>100:
-            raise ValueError('Missing or invalid object name')
+        name=next((v.strip() for key in ('name','englishName','localizedName','localized-name')
+                   if isinstance((v:=data.get(key)),str) and v.strip()),'')
+        if not name:
+            designations=data.get('designations')
+            if isinstance(designations,str):
+                name=designations.split(' - ',1)[0].strip()
+            elif isinstance(designations,list):
+                name=next((v.strip() for v in designations if isinstance(v,str) and v.strip()),'')
+        if len(name)>100:
+            raise ValueError('Invalid object name (over 100 characters)')
         # Stellarium's getObjectInfo map returns raJ2000 and decJ2000
         # as decimal DEGREES, not hours or sexagesimal strings.
         if isinstance(ra,(int,float)) and not isinstance(ra,bool) and isinstance(dec,(int,float)) and not isinstance(dec,bool):
             ra_deg=float(ra); dec_deg=float(dec)
             if not math.isfinite(ra_deg) or not math.isfinite(dec_deg) or not -360<=ra_deg<=360 or not -90<=dec_deg<=90:
                 raise ValueError('J2000 coordinates outside valid range')
-            return SourceConfig(name,(ra_deg/15.0)%24,dec_deg,0.0)
+            return SourceConfig(name or f'J2000 RA {ra_deg:.6f} Dec {dec_deg:+.6f}',(ra_deg/15.0)%24,dec_deg,0.0)
         if not isinstance(ra,str) or not isinstance(dec,str):
             raise ValueError('Unexpected J2000 coordinate representation; inspect raw response')
         if not re.search(r'[h:]|\\s',ra.lower()) or not re.search(r'[d°:]|\\s',dec.lower()):
             raise ValueError('Ambiguous J2000 coordinate units; inspect raw response')
-        return SourceConfig(name,StellariumDialog.angle(ra,True),StellariumDialog.angle(dec),0.0)
+        ra_hours=StellariumDialog.angle(ra,True)
+        dec_deg=StellariumDialog.angle(dec)
+        return SourceConfig(name or f'J2000 RA {ra_hours*15:.6f} Dec {dec_deg:+.6f}',ra_hours,dec_deg,0.0)
 
     def read_selection(self):
         self.pending=None
