@@ -2,7 +2,7 @@
 #!/usr/bin/env python3
 """WT8 PyQt5 antenna controller GUI."""
 from __future__ import annotations
-import argparse, csv, json, math, queue, re, subprocess, threading, time
+import argparse, csv, html, json, math, queue, re, subprocess, threading, time
 from urllib.request import urlopen
 from datetime import datetime, timezone
 from pathlib import Path
@@ -21,7 +21,7 @@ from wt8_service import validate_service_target
 from wt8_precision import precision_fixed_slew, PositionCancelled
 from wt8_voice import VoiceAnnunciator
 from wt8_stellarium_feedback import StellariumFeedback
-APP_VERSION = "v0.5.1"
+APP_VERSION = "v0.5.2"
 
 def application_version():
     """Display the checked-out revision, without requiring Git to launch WT8."""
@@ -658,6 +658,23 @@ class StellariumDialog(SimpleDialog):
                 if len(raw)>65536:
                     raise ValueError('Response exceeds 64 KiB')
                 data=json.loads(raw.decode('utf-8'))
+                # Stellarium may omit the name from JSON while showing it in HTML.
+                has_name=any(isinstance(data.get(k),str) and data[k].strip()
+                             for k in ('name','englishName','localizedName','localized-name','designations'))
+                has_name=has_name or (isinstance(data.get('designations'),list)
+                                       and any(isinstance(v,str) and v.strip() for v in data['designations']))
+                if not has_name:
+                    try:
+                        with urlopen('http://127.0.0.1:8090/api/objects/info',timeout=3) as response:
+                            info_html=response.read(65537)
+                        if len(info_html)<=65536:
+                            match=re.search(r'<h2\\b[^>]*>(.*?)</h2>',info_html.decode('utf-8'),re.I|re.S)
+                            if match:
+                                display_name=html.unescape(re.sub(r'<[^>]*>','',match.group(1))).strip()
+                                if 0<len(display_name)<=100:
+                                    data['name']=display_name
+                    except (OSError,UnicodeError,ValueError):
+                        pass  # Preserve existing coordinate-based fallback.
                 result=(data,None)
             except Exception as exc:
                 result=(None,str(exc))
