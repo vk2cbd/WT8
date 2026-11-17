@@ -1060,15 +1060,25 @@ class WT8App(QWidget):
         if not self.sessions:
             return
         if source is None:
-            if error != self.stellarium_last_error:
-                self.stellarium_last_error=error
-                self.set_status(f'Stellarium selection read failed: {error}')
-            if not self.stellarium_accepted:
-                self.stellarium_pending=None
-                self.stellarium_last_key=None
-                self.stellarium_readout.setText('No data')
-                self.stellarium_readout.setToolTip('No valid Stellarium selection received')
+            # A lost Stellarium connection invalidates the live selection, even
+            # if that selection was previously accepted into the WT8 catalogue.
+            # Do not remove the saved source or issue antenna movement commands.
+            self.stellarium_pending=None
+            self.stellarium_last_key=None
+            self.stellarium_accepted_key=None
+            self.stellarium_accepted=False
+            self.stellarium_readout.setText('No data')
+            self.stellarium_readout.setToolTip('No valid live Stellarium selection available')
             self.stellarium_button_style()
+            if self.stellarium_feedback is not None:
+                self.stellarium_feedback.close()
+                self.stellarium_feedback=None
+                self.action_buttons['Stellarium Live'].setText('Stellarium Live')
+                self.style_stellarium_live_button()
+                self.set_status('Stellarium data lost: Stellarium Live stopped.')
+            elif error != self.stellarium_last_error:
+                self.set_status('Stellarium: No data.')
+            self.stellarium_last_error=error
             return
         self.stellarium_last_error=None
         # A repeated poll of the accepted selection is not a new notification.
