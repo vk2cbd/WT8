@@ -1162,6 +1162,8 @@ class WT8App(QWidget):
         self.selected_source_name=source.name
         self.site.selected_source=source.name
         self.update_reference()
+        # Keep the SELECTED SOURCE panel synchronized even while tracking is idle.
+        self.apply_target(self.current_tracking_target('source'))
         self.stellarium_pending=source
         self.stellarium_last_key=(source.name,source.ra_hours,source.dec_degrees)
         self.stellarium_accepted=True
@@ -1172,6 +1174,13 @@ class WT8App(QWidget):
         self.event_log.info('STELLARIUM_SOURCE_IMPORT',source=source.name,ra_hours=source.ra_hours,dec_degrees=source.dec_degrees)
         return True
 
+    def style_stellarium_live_button(self):
+        button=self.action_buttons['Stellarium Live']
+        if self.stellarium_feedback is not None:
+            button.setStyleSheet('QPushButton {background-color:#d88936; color:#171717; font-weight:bold;}')
+        else:
+            button.setStyleSheet('')
+
     def toggle_stellarium_feedback(self):
         if self.stellarium_feedback is None and not self.stellarium_accepted:
             self.set_status('Accept a Stellarium source before enabling Stellarium Live.')
@@ -1180,6 +1189,7 @@ class WT8App(QWidget):
             self.stellarium_feedback.close()
             self.stellarium_feedback=None
             self.action_buttons['Stellarium Live'].setText('Stellarium Live')
+            self.style_stellarium_live_button()
             self.set_status('Stellarium antenna-position feedback stopped.')
             return
         try:
@@ -1188,6 +1198,7 @@ class WT8App(QWidget):
             feedback.start()
             self.stellarium_feedback=feedback
             self.action_buttons['Stellarium Live'].setText('Stop Stellarium Live')
+            self.style_stellarium_live_button()
             self.set_status('Stellarium read-only feedback enabled: East TCP 10001, West TCP 10002.')
         except Exception as exc:
             self.set_status(f'Stellarium feedback unavailable: {exc}. Install python3-astropy if missing.')
