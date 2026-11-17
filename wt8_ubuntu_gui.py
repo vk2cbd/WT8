@@ -3,7 +3,7 @@
 """WT8 PyQt5 antenna controller GUI."""
 from __future__ import annotations
 import argparse, csv, html, json, math, queue, re, subprocess, threading, time
-from urllib.request import urlopen
+from urllib.request import Request, urlopen
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -645,7 +645,8 @@ class StellariumDialog(SimpleDialog):
     @staticmethod
     def fetch_selection():
         url='http://127.0.0.1:8090/api/objects/info?format=json'
-        with urlopen(url,timeout=3) as response:
+        request=Request(url,headers={'Cache-Control':'no-cache, no-store','Pragma':'no-cache'})
+        with urlopen(request,timeout=3) as response:
             raw=response.read(65537)
         if len(raw)>65536:
             raise ValueError('Response exceeds 64 KiB')
@@ -929,7 +930,9 @@ class WT8App(QWidget):
         self.stellarium_pending=None
         self.stellarium_accepted=False
         self.stellarium_poll_busy=False
+        self.stellarium_last_error=None
         self.stellarium_last_key=None
+        self.stellarium_last_error=None
         self.stellarium_accepted_key=None
         self.stellarium_flash_phase=False
         self.voice=VoiceAnnunciator()
@@ -1135,6 +1138,9 @@ class WT8App(QWidget):
         if not self.sessions:
             return
         if source is None:
+            if error != self.stellarium_last_error:
+                self.stellarium_last_error=error
+                self.set_status(f'Stellarium selection read failed: {error}')
             if not self.stellarium_accepted:
                 self.stellarium_pending=None
                 self.stellarium_last_key=None
@@ -1142,6 +1148,7 @@ class WT8App(QWidget):
                 self.stellarium_readout.setToolTip('No valid Stellarium selection received')
             self.stellarium_button_style()
             return
+        self.stellarium_last_error=None
         # A repeated poll of the accepted selection is not a new notification.
         if self.stellarium_same_source(source,self.stellarium_accepted_key):
             self.stellarium_pending=self.stellarium_accepted_key
@@ -1151,6 +1158,7 @@ class WT8App(QWidget):
             if not self.stellarium_same_source(source,self.stellarium_pending):
                 self.stellarium_pending=source
                 self.stellarium_accepted=False
+                self.set_status(f'New Stellarium source received: {source.name}. Press Stellarium to accept.')
             self.stellarium_readout.setText(
                 f'{source.name}\nRA: {source.ra_hours:.5f} h\nDec: {source.dec_degrees:+.5f}°')
         self.stellarium_readout.setToolTip(
@@ -1192,15 +1200,15 @@ class WT8App(QWidget):
         if not self.sessions:
             self.set_status('Connect an antenna before using Stellarium Live.')
             return
-        if self.stellarium_feedback is None and not self.stellarium_accepted:
-            self.set_status('Accept a Stellarium source before enabling Stellarium Live.')
-            return
         if self.stellarium_feedback is not None:
             self.stellarium_feedback.close()
             self.stellarium_feedback=None
             self.action_buttons['Stellarium Live'].setText('Stellarium Live')
             self.style_stellarium_live_button()
             self.set_status('Stellarium antenna-position feedback stopped.')
+            return
+        if not self.stellarium_accepted:
+            self.set_status('Accept a Stellarium source before enabling Stellarium Live.')
             return
         try:
             import astropy.coordinates  # Required for accurate ICRS/J2000 conversion.
