@@ -561,37 +561,8 @@ class B210CalibrationDialog(SimpleDialog):
             self.set_status(f'Calibration save fault: {exc}')
 
 
-class StellariumDialog(SimpleDialog):
-    """Read-only Stellarium preview; acceptance never commands antenna motion."""
-    def __init__(self, app):
-        super().__init__(app, 'Stellarium source import')
-        self.app=app
-        self.pending=None
-        self.main.addWidget(lbl('Stellarium Desktop: enable Plugins → Remote Control → HTTP server (port 8090).'))
-        self.main.addWidget(lbl('Select a fixed celestial object in Stellarium, then click Read Selection.'))
-        row=QHBoxLayout()
-        row.addWidget(lbl('API URL'))
-        self.url=QLineEdit('http://127.0.0.1:8090/api/objects/info?format=json')
-        row.addWidget(self.url)
-        self.main.addLayout(row)
-        self.preview=QPlainTextEdit()
-        self.preview.setReadOnly(True)
-        self.preview.setPlainText('No source received. Antennas will not move.')
-        self.main.addWidget(self.preview)
-        actions=QHBoxLayout()
-        read=btn('Read Selection')
-        read.clicked.connect(self.read_selection)
-        actions.addWidget(read)
-        self.accept_button=btn('Accept as WT8 Source')
-        self.accept_button.setEnabled(False)
-        self.accept_button.clicked.connect(self.accept_source)
-        actions.addWidget(self.accept_button)
-        close=btn('Close')
-        close.clicked.connect(self.reject)
-        actions.addWidget(close)
-        self.main.addLayout(actions)
-        self.resize(690,370)
-
+class StellariumSourceReader:
+    """Read and validate selected Stellarium object; no legacy import dialog."""
     @staticmethod
     def angle(value, hours=False):
         """Parse an explicitly labelled J2000 sexagesimal coordinate."""
@@ -638,8 +609,8 @@ class StellariumDialog(SimpleDialog):
             raise ValueError('Unexpected J2000 coordinate representation; inspect raw response')
         if not re.search(r'[h:]|\\s',ra.lower()) or not re.search(r'[d°:]|\\s',dec.lower()):
             raise ValueError('Ambiguous J2000 coordinate units; inspect raw response')
-        ra_hours=StellariumDialog.angle(ra,True)
-        dec_deg=StellariumDialog.angle(dec)
+        ra_hours=StellariumSourceReader.angle(ra,True)
+        dec_deg=StellariumSourceReader.angle(dec)
         return SourceConfig(name or f'J2000 RA {ra_hours*15:.6f} Dec {dec_deg:+.6f}',ra_hours,dec_deg,0.0)
 
     @staticmethod
@@ -671,56 +642,7 @@ class StellariumDialog(SimpleDialog):
                 pass
         return data
 
-    def read_selection(self):
-        self.pending=None
-        self.accept_button.setEnabled(False)
-        url=self.url.text().strip()
-        if url != 'http://127.0.0.1:8090/api/objects/info?format=json':
-            self.preview.setPlainText('Only the local Stellarium endpoint is enabled in Stage 1.')
-            return
-        self.preview.setPlainText('Reading Stellarium...')
-        # Run HTTP I/O outside Qt's GUI thread.
-        def worker():
-            try:
-                result=(self.fetch_selection(),None)
-            except Exception as exc:
-                result=(None,str(exc))
-            self.app.emit(lambda payload:self.show_response(*payload),result)
-        self.app.run_thread(worker,'StellariumRead')
 
-    def show_response(self,data,error):
-        if not self.isVisible(): return
-        if error:
-            self.preview.setPlainText('Stellarium connection failed: '+error)
-            return
-        try:
-            source=self.parse_source(data)
-        except Exception as exc:
-            self.preview.setPlainText('Import not available: '+str(exc)+'\n\nRaw object data:\n'+json.dumps(data,indent=2,ensure_ascii=False)[:12000])
-            return
-        self.pending=source
-        self.accept_button.setEnabled(True)
-        self.preview.setPlainText(
-            f'Object: {source.name}\nRA (J2000): {source.ra_hours:.8f} hours\n'
-            f'Dec (J2000): {source.dec_degrees:+.8f} degrees\n\n'
-            'Accept adds/selects the source in WT8. It does NOT start tracking or move either antenna.\n'
-            'Verify the coordinate epoch and source identity before using Track Source.'
-        )
-
-    def accept_source(self):
-        source=self.pending
-        if source is None: return
-        if self.app.tracking_kind or self.app.fixed_target_mode:
-            QMessageBox.warning(self,'Tracking active','Stop tracking or fixed-position movement before changing the selected source.')
-            return
-        try:
-            if not self.app.accept_stellarium_source(source):
-                return
-            self.pending=None
-            self.accept_button.setEnabled(False)
-            self.accept()
-        except Exception as exc:
-            QMessageBox.warning(self,'Import failed',str(exc))
 
 class SourcesDialog(SimpleDialog):
     NAME_COL=0; RA_COL=1; DEC_COL=2; AZ_COL=3; EL_COL=4; FLUX_COL=5
@@ -1117,8 +1039,8 @@ class WT8App(QWidget):
         self.stellarium_poll_busy=True
         def worker():
             try:
-                data=StellariumDialog.fetch_selection()
-                source=StellariumDialog.parse_source(data)
+                data=StellariumSourceReader.fetch_selection()
+                source=StellariumSourceReader.parse_source(data)
                 result=(source,None)
             except Exception as exc:
                 result=(None,str(exc))
@@ -1231,8 +1153,7 @@ class WT8App(QWidget):
             except Exception as exc:
                 self.set_status(f'Stellarium source acceptance failed: {exc}')
             return
-        dialog=StellariumDialog(self)
-        dialog.exec_()
+        self.set_status('No new Stellarium source available to accept.')
 
     def toggle_power_panel(self):
         visible=not self.power.isVisible()
