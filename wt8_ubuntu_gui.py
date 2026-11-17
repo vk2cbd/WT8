@@ -650,7 +650,7 @@ class SourcesDialog(SimpleDialog):
         super().__init__(app,'Sources'); self.table=QTableWidget(0,6); self.table.setHorizontalHeaderLabels(['Name','RA h','Dec deg','Current AZ','Current EL','Flux 4800 MHz']); self.main.addWidget(self.table)
         for src in app.sources.values(): self.add_row(src)
         row=QHBoxLayout(); self.selected=QComboBox(); self.refresh_selected_items(); self.selected.setCurrentText(app.selected_source_name); add=btn('Add Row'); delete=btn('Delete Row'); add.clicked.connect(self.add_new_source); delete.clicked.connect(self.delete_row); row.addWidget(lbl('Selected')); row.addWidget(self.selected); row.addWidget(add); row.addWidget(delete); row.addStretch(1); self.main.addLayout(row); self.resize(760,420); self.buttons()
-        self.table.itemChanged.connect(self.on_item_changed); self.table.itemSelectionChanged.connect(self.on_table_selection_changed); self.timer=QTimer(self); self.timer.timeout.connect(self.update_current_positions); self.timer.start(1000); self.update_current_positions()
+        self.table.itemChanged.connect(self.on_item_changed); self.table.itemSelectionChanged.connect(self.on_table_selection_changed); self.selected.currentTextChanged.connect(self.on_selected_changed); self.timer=QTimer(self); self.timer.timeout.connect(self.update_current_positions); self.timer.start(1000); self.update_current_positions()
     def readonly_item(self,value='--'):
         item=QTableWidgetItem(str(value)); item.setFlags(item.flags() & ~Qt.ItemIsEditable); return item
     def add_row(self,src):
@@ -663,7 +663,30 @@ class SourcesDialog(SimpleDialog):
         r=self.table.currentRow()
         if r < 0: return
         item=self.table.item(r,self.NAME_COL); name=(item.text() if item else '').strip()
-        if name: self.selected.setCurrentText(name)
+        if name:
+            self.selected.setCurrentText(name)
+            # setCurrentText does not emit when this row was already selected.
+            self.on_selected_changed(name)
+    def on_selected_changed(self,name):
+        name=name.strip()
+        if not name or not self.app.sessions:
+            return
+        if self.app.tracking_kind or self.app.fixed_target_mode:
+            self.app.set_status('Stop tracking or fixed-position movement before selecting another source.')
+            return
+        try:
+            sources=self.read_sources_from_table()
+            if name not in sources:
+                return
+            # Selection is a display/configuration change only, never a slew.
+            self.app.sources=sources
+            self.app.selected_source_name=name
+            self.app.site.selected_source=name
+            save_sources(self.app.config_path,sources,name)
+            self.app.apply_target(self.app.current_tracking_target('source'))
+            self.app.set_status(f'Source selected: {name}. Tracking not started.')
+        except Exception as exc:
+            self.app.set_status(f'Source selection failed: {exc}')
     def select_source(self):
         self.refresh_selected_items(); selected=self.selected.currentText().strip()
         if not selected:
@@ -703,7 +726,10 @@ class SourcesDialog(SimpleDialog):
             sources=self.read_sources_from_table()
             if not sources: raise ValueError('At least one source is required')
             selected=self.selected.currentText().strip(); selected=selected if selected in sources else next(iter(sources))
-            self.app.sources=sources; self.app.selected_source_name=selected; self.app.site.selected_source=selected; save_sources(self.app.config_path,sources,selected); self.app.set_status('Sources saved.'); super().accept()
+            self.app.sources=sources; self.app.selected_source_name=selected; self.app.site.selected_source=selected; save_sources(self.app.config_path,sources,selected)
+            if self.app.sessions and not self.app.tracking_kind and not self.app.fixed_target_mode:
+                self.app.apply_target(self.app.current_tracking_target('source'))
+            self.app.set_status('Sources saved.'); super().accept()
         except Exception as exc: self.fail(exc)
 class CalibrationDialog(SimpleDialog):
     def __init__(self,app):
