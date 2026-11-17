@@ -1148,9 +1148,9 @@ class WT8App(QWidget):
                 self.stellarium_pending=source
                 self.stellarium_accepted=False
             self.stellarium_readout.setText(
-                f'{source.name}\\nRA: {source.ra_hours:.5f} h\\nDec: {source.dec_degrees:+.5f}°')
+                f'{source.name}\nRA: {source.ra_hours:.5f} h\nDec: {source.dec_degrees:+.5f}°')
         self.stellarium_readout.setToolTip(
-            f'{source.name}\\nJ2000 RA: {source.ra_hours:.8f} h\\nJ2000 Dec: {source.dec_degrees:+.8f}°')
+            f'{source.name}\nJ2000 RA: {source.ra_hours:.8f} h\nJ2000 Dec: {source.dec_degrees:+.8f}°')
         self.stellarium_button_style()
 
     def accept_stellarium_source(self,source):
