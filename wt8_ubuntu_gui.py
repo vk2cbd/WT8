@@ -1107,6 +1107,8 @@ class WT8App(QWidget):
         self.stellarium_button_style()
 
     def poll_stellarium_selection(self):
+        if not self.sessions:
+            return
         if self.stellarium_poll_busy:
             return
         self.stellarium_poll_busy=True
@@ -1130,6 +1132,8 @@ class WT8App(QWidget):
 
     def receive_stellarium_selection(self,source,error):
         self.stellarium_poll_busy=False
+        if not self.sessions:
+            return
         if source is None:
             if not self.stellarium_accepted:
                 self.stellarium_pending=None
@@ -1154,6 +1158,9 @@ class WT8App(QWidget):
         self.stellarium_button_style()
 
     def accept_stellarium_source(self,source):
+        if not self.sessions:
+            self.set_status('Connect an antenna before accepting a Stellarium source.')
+            return False
         if self.tracking_kind or self.fixed_target_mode:
             QMessageBox.warning(self,'Tracking active','Stop tracking or fixed-position movement before changing the selected source.')
             return False
@@ -1182,6 +1189,9 @@ class WT8App(QWidget):
             button.setStyleSheet('')
 
     def toggle_stellarium_feedback(self):
+        if not self.sessions:
+            self.set_status('Connect an antenna before using Stellarium Live.')
+            return
         if self.stellarium_feedback is None and not self.stellarium_accepted:
             self.set_status('Accept a Stellarium source before enabling Stellarium Live.')
             return
@@ -1204,6 +1214,9 @@ class WT8App(QWidget):
             self.set_status(f'Stellarium feedback unavailable: {exc}. Install python3-astropy if missing.')
 
     def open_stellarium_dialog(self):
+        if not self.sessions:
+            self.set_status('Connect an antenna before selecting a Stellarium source.')
+            return
         if self.stellarium_pending is not None:
             try:
                 self.accept_stellarium_source(self.stellarium_pending)
@@ -1414,6 +1427,7 @@ class WT8App(QWidget):
             self.sessions[name]=session; self.positions[name]=pos; self.cards[name].set_position(pos); self._voice_suppress_connect_stop.add(name); self.cards[name].set_state('STOPPED'); self.set_status(f'{name} connected. Connected {len(self.sessions)}/{len(self.configs)} antennas.')
         else: self.cards[name].set_state('FAULT'); self.set_status(f'{name} connect fault: {error}')
     def disconnect_all(self):
+        self.reset_stellarium_connection_state()
         for name in self.cards: self.stop_jog(name)
         self.service_stop.set(); self.park_stop.set()
         self.stop_all(); sessions=list(self.sessions.items()); self.sessions.clear()
@@ -1423,9 +1437,24 @@ class WT8App(QWidget):
                 except Exception: pass
                 self.emit(lambda name:self.finish_disconnect(name),n)
         self.run_thread(worker,'Disconnect')
+    def reset_stellarium_connection_state(self):
+        if self.stellarium_feedback is not None:
+            self.stellarium_feedback.close()
+            self.stellarium_feedback=None
+        self.action_buttons['Stellarium Live'].setText('Stellarium Live')
+        self.style_stellarium_live_button()
+        self.stellarium_pending=None
+        self.stellarium_last_key=None
+        self.stellarium_accepted_key=None
+        self.stellarium_accepted=False
+        self.stellarium_readout.setText('No data')
+        self.stellarium_readout.setToolTip('Connect an antenna to receive Stellarium selections')
+        self.stellarium_button_style()
+
     def finish_disconnect(self,name):
         self.positions.pop(name,None); self.position_rate_state.pop(name,None); self.tracking_nominal_az.pop(name,None); self.tracking_az_comp_force.pop(name,None); self.cards[name].set_position(None); self.cards[name].set_target(None,None); self.cards[name].set_state('DISCONNECTED'); self.set_status(f'{name} disconnected.')
         if not self.sessions:
+            self.reset_stellarium_connection_state()
             self.timeout_in_progress=False
     def stop_tracking(self):
         if self.park_active or self.service_active:
@@ -1695,6 +1724,8 @@ class WT8App(QWidget):
             if name in self.cards:
                 self.cards[name].set_state('FAULT')
             self.set_status(f'{mode}: {name} controller disconnect failed: {error}')
+        if not self.sessions:
+            self.reset_stellarium_connection_state()
         if token == self.fixed_target_generation:
             self.clear_fixed_target_display()
         if not failures:
