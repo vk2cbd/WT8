@@ -642,6 +642,34 @@ class StellariumDialog(SimpleDialog):
         dec_deg=StellariumDialog.angle(dec)
         return SourceConfig(name or f'J2000 RA {ra_hours*15:.6f} Dec {dec_deg:+.6f}',ra_hours,dec_deg,0.0)
 
+    @staticmethod
+    def fetch_selection():
+        url='http://127.0.0.1:8090/api/objects/info?format=json'
+        with urlopen(url,timeout=3) as response:
+            raw=response.read(65537)
+        if len(raw)>65536:
+            raise ValueError('Response exceeds 64 KiB')
+        data=json.loads(raw.decode('utf-8'))
+        if not isinstance(data,dict):
+            raise ValueError('Invalid Stellarium object response')
+        has_name=any(isinstance(data.get(k),str) and data[k].strip()
+                     for k in ('name','englishName','localizedName','localized-name','designations'))
+        has_name=has_name or (isinstance(data.get('designations'),list)
+                              and any(isinstance(v,str) and v.strip() for v in data['designations']))
+        if not has_name:
+            try:
+                with urlopen('http://127.0.0.1:8090/api/objects/info',timeout=3) as response:
+                    info_html=response.read(65537)
+                if len(info_html)<=65536:
+                    match=re.search(r'<h2\\b[^>]*>(.*?)</h2>',info_html.decode('utf-8'),re.I|re.S)
+                    if match:
+                        display_name=html.unescape(re.sub(r'<[^>]*>','',match.group(1))).strip()
+                        if 0<len(display_name)<=100:
+                            data['name']=display_name
+            except (OSError,UnicodeError,ValueError):
+                pass
+        return data
+
     def read_selection(self):
         self.pending=None
         self.accept_button.setEnabled(False)
@@ -653,29 +681,7 @@ class StellariumDialog(SimpleDialog):
         # Run HTTP I/O outside Qt's GUI thread.
         def worker():
             try:
-                with urlopen(url,timeout=3) as response:
-                    raw=response.read(65537)
-                if len(raw)>65536:
-                    raise ValueError('Response exceeds 64 KiB')
-                data=json.loads(raw.decode('utf-8'))
-                # Stellarium may omit the name from JSON while showing it in HTML.
-                has_name=any(isinstance(data.get(k),str) and data[k].strip()
-                             for k in ('name','englishName','localizedName','localized-name','designations'))
-                has_name=has_name or (isinstance(data.get('designations'),list)
-                                       and any(isinstance(v,str) and v.strip() for v in data['designations']))
-                if not has_name:
-                    try:
-                        with urlopen('http://127.0.0.1:8090/api/objects/info',timeout=3) as response:
-                            info_html=response.read(65537)
-                        if len(info_html)<=65536:
-                            match=re.search(r'<h2\b[^>]*>(.*?)</h2>',info_html.decode('utf-8'),re.I|re.S)
-                            if match:
-                                display_name=html.unescape(re.sub(r'<[^>]*>','',match.group(1))).strip()
-                                if 0<len(display_name)<=100:
-                                    data['name']=display_name
-                    except (OSError,UnicodeError,ValueError):
-                        pass  # Preserve existing coordinate-based fallback.
-                result=(data,None)
+                result=(self.fetch_selection(),None)
             except Exception as exc:
                 result=(None,str(exc))
             self.app.emit(lambda payload:self.show_response(*payload),result)
@@ -707,13 +713,8 @@ class StellariumDialog(SimpleDialog):
             QMessageBox.warning(self,'Tracking active','Stop tracking or fixed-position movement before changing the selected source.')
             return
         try:
-            self.app.sources[source.name]=source
-            save_sources(self.app.config_path,self.app.sources,source.name)
-            self.app.selected_source_name=source.name
-            self.app.site.selected_source=source.name
-            self.app.update_reference()
-            self.app.set_status(f'Stellarium source selected: {source.name}. Tracking not started.')
-            self.app.event_log.info('STELLARIUM_SOURCE_IMPORT',source=source.name,ra_hours=source.ra_hours,dec_degrees=source.dec_degrees)
+            if not self.app.accept_stellarium_source(source):
+                return
             self.pending=None
             self.accept_button.setEnabled(False)
             self.accept()
@@ -925,6 +926,11 @@ class WT8App(QWidget):
         super().__init__(); self.config_path=Path(config_path); self.configs=load_configs(self.config_path); self.site=load_site_config(self.config_path); self.power_config=load_power_config(self.config_path); self.sources=load_sources(self.config_path); self.selected_source_name=self.site.selected_source if self.site.selected_source in self.sources else next(iter(self.sources), '')
         self.event_log=EventLogger(Path('logs'),self.site.log_retention_days,self.site.log_level); self.state_store=AppStateStore(); self.sessions={}; self.positions={}; self.position_rate_state={}; self.cards={}; self.current_target=None; self.card_targets={}; self.tracking_kind=''; self.tracking_stop=threading.Event(); self.tracking_thread=None; self.service_stop=threading.Event(); self.service_active=False; self.park_stop=threading.Event(); self.park_active=False; self.fixed_target_mode=''; self.fixed_target_generation=0; self.tracking_starting=False; self.jog_stops={}; self.manual_axes={}; self.manual_pending={}; self.manual_modes={}; self.b210_stop=threading.Event(); self.b210_thread=None; self.events=queue.Queue(); self.event_history=[]; self.log_handle=None; self.log_writer=None; self.scan_stop=threading.Event(); self.scan_thread=None; self.scan_antenna_name=''; self.scan_axis=None; self.scan_offset_degrees=0.0; self.scan_offset_lock=threading.Lock(); self.scan_result_dialogs=[]; self.yfactor_stop=threading.Event(); self.yfactor_thread=None; self.yfactor_active=False; self.yfactor_hot_label=''; self.peak_stop=threading.Event(); self.peak_thread=None; self.tracking_nominal_az={}; self.tracking_az_comp_force={}; self.modeless_dialogs=[]; self.active_scan_antenna=''; self.active_scan_dialog=None; self.scan_resume_kind=''; self.last_user_activity=time.monotonic(); self.timeout_in_progress=False
         self.stellarium_feedback=None
+        self.stellarium_pending=None
+        self.stellarium_accepted=False
+        self.stellarium_poll_busy=False
+        self.stellarium_last_key=None
+        self.stellarium_flash_phase=False
         self.voice=VoiceAnnunciator()
         self.voice_settings=QSettings('WT8', 'AntennaController')
         self.saved_voice_muted=self.voice_settings.value('voice/muted', True, type=bool)
@@ -932,6 +938,12 @@ class WT8App(QWidget):
         self._voice_state_versions={}
         self._voice_suppress_connect_stop=set()
         self.setWindowTitle(f'WT8 — Antenna Control & Tracking {application_version()}'); self.resize(1380,920); self.setMinimumSize(1250,880); self.build_ui(); self.style_ui(); self.set_status('Load config, connect antennas, then use guarded jogs.'); self.event_log.info('APP_START',version=APP_VERSION,config=str(config_path))
+        self.stellarium_poll_timer=QTimer(self)
+        self.stellarium_poll_timer.timeout.connect(self.poll_stellarium_selection)
+        self.stellarium_poll_timer.start(2500)
+        self.stellarium_flash_timer=QTimer(self)
+        self.stellarium_flash_timer.timeout.connect(self.flash_stellarium_button)
+        self.stellarium_flash_timer.start(650)
         QApplication.instance().installEventFilter(self)
         self.t_ref=QTimer(self); self.t_ref.timeout.connect(self.update_reference); self.t_ref.start(1000); self.t_evt=QTimer(self); self.t_evt.timeout.connect(self.process_events); self.t_evt.start(100); self.t_pos=QTimer(self); self.t_pos.timeout.connect(self.poll_positions); self.t_pos.start(1000)
     def build_ui(self):
@@ -976,6 +988,13 @@ class WT8App(QWidget):
             ('Stellarium','toolAction',self.open_stellarium_dialog,'SP_ComputerIcon'),
             ('Stellarium Live','toolAction',self.toggle_stellarium_feedback,'SP_ComputerIcon'),
         ]
+        # Compact readout alongside the Stellarium controls; no extra toolbar row.
+        self.stellarium_readout=QLabel('No data')
+        self.stellarium_readout.setObjectName('stellariumReadout')
+        self.stellarium_readout.setMinimumWidth(190)
+        self.stellarium_readout.setMaximumWidth(260)
+        self.stellarium_readout.setWordWrap(True)
+        self.stellarium_readout.setToolTip('No Stellarium selection received')
         tools_actions=[
             ('Calibration','toolAction',self.open_calibration_dialog,'SP_DialogApplyButton'),
             ('Peak Cal','toolAction',self.open_peak_calibration,'SP_ArrowUp'),
@@ -991,6 +1010,8 @@ class WT8App(QWidget):
                 button.setIcon(self.style().standardIcon(getattr(QStyle,icon_id)))
                 button.setMinimumWidth(max(90,button.fontMetrics().horizontalAdvance(label)+48))
                 layout.addWidget(button)
+                if label == 'Stellarium':
+                    layout.addWidget(self.stellarium_readout)
             layout.addStretch(1); main.addLayout(layout)
         top2=QHBoxLayout(); top2.setSpacing(6)
         motion_actions=[
@@ -1071,7 +1092,78 @@ class WT8App(QWidget):
             widget.setWordWrap(True); sg.addWidget(widget)
         sg.addStretch(1); bottom.addWidget(status_panel,2)
         main.addWidget(self.event_panel); self.event_panel.hide()
+    def stellarium_button_style(self):
+        button=self.action_buttons['Stellarium']
+        if self.stellarium_accepted:
+            button.setStyleSheet('QPushButton {background-color:#d88936; color:#171717; font-weight:bold;}')
+        elif self.stellarium_pending is not None and self.stellarium_flash_phase:
+            button.setStyleSheet('QPushButton {background-color:#e8bd77; color:#171717;}')
+        else:
+            button.setStyleSheet('')
+
+    def flash_stellarium_button(self):
+        self.stellarium_flash_phase=not self.stellarium_flash_phase
+        self.stellarium_button_style()
+
+    def poll_stellarium_selection(self):
+        if self.stellarium_poll_busy:
+            return
+        self.stellarium_poll_busy=True
+        def worker():
+            try:
+                data=StellariumDialog.fetch_selection()
+                source=StellariumDialog.parse_source(data)
+                result=(source,None)
+            except Exception as exc:
+                result=(None,str(exc))
+            self.emit(lambda payload:self.receive_stellarium_selection(*payload),result)
+        self.run_thread(worker,'StellariumPoll')
+
+    def receive_stellarium_selection(self,source,error):
+        self.stellarium_poll_busy=False
+        if source is None:
+            if not self.stellarium_accepted:
+                self.stellarium_pending=None
+                self.stellarium_last_key=None
+                self.stellarium_readout.setText('No data')
+                self.stellarium_readout.setToolTip('No valid Stellarium selection received')
+            self.stellarium_button_style()
+            return
+        key=(source.name,source.ra_hours,source.dec_degrees)
+        if key != self.stellarium_last_key:
+            self.stellarium_last_key=key
+            self.stellarium_pending=source
+            self.stellarium_accepted=False
+        if self.stellarium_accepted:
+            self.stellarium_readout.setText(f'Accepted: {source.name}')
+        else:
+            self.stellarium_readout.setText(f'{source.name}\\nRA {source.ra_hours:.5f}h  Dec {source.dec_degrees:+.5f}°')
+        self.stellarium_readout.setToolTip(
+            f'{source.name}\\nJ2000 RA: {source.ra_hours:.8f} h\\nJ2000 Dec: {source.dec_degrees:+.8f}°')
+        self.stellarium_button_style()
+
+    def accept_stellarium_source(self,source):
+        if self.tracking_kind or self.fixed_target_mode:
+            QMessageBox.warning(self,'Tracking active','Stop tracking or fixed-position movement before changing the selected source.')
+            return False
+        self.sources[source.name]=source
+        save_sources(self.config_path,self.sources,source.name)
+        self.selected_source_name=source.name
+        self.site.selected_source=source.name
+        self.update_reference()
+        self.stellarium_pending=source
+        self.stellarium_last_key=(source.name,source.ra_hours,source.dec_degrees)
+        self.stellarium_accepted=True
+        self.stellarium_readout.setText(f'Accepted: {source.name}')
+        self.stellarium_button_style()
+        self.set_status(f'Stellarium source selected: {source.name}. Tracking not started.')
+        self.event_log.info('STELLARIUM_SOURCE_IMPORT',source=source.name,ra_hours=source.ra_hours,dec_degrees=source.dec_degrees)
+        return True
+
     def toggle_stellarium_feedback(self):
+        if self.stellarium_feedback is None and not self.stellarium_accepted:
+            self.set_status('Accept a Stellarium source before enabling Stellarium Live.')
+            return
         if self.stellarium_feedback is not None:
             self.stellarium_feedback.close()
             self.stellarium_feedback=None
@@ -1089,6 +1181,12 @@ class WT8App(QWidget):
             self.set_status(f'Stellarium feedback unavailable: {exc}. Install python3-astropy if missing.')
 
     def open_stellarium_dialog(self):
+        if self.stellarium_pending is not None:
+            try:
+                self.accept_stellarium_source(self.stellarium_pending)
+            except Exception as exc:
+                self.set_status(f'Stellarium source acceptance failed: {exc}')
+            return
         dialog=StellariumDialog(self)
         dialog.exec_()
 
