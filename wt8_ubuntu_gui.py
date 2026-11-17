@@ -930,6 +930,7 @@ class WT8App(QWidget):
         self.stellarium_accepted=False
         self.stellarium_poll_busy=False
         self.stellarium_last_key=None
+        self.stellarium_accepted_key=None
         self.stellarium_flash_phase=False
         self.voice=VoiceAnnunciator()
         self.voice_settings=QSettings('WT8', 'AntennaController')
@@ -1119,6 +1120,14 @@ class WT8App(QWidget):
             self.emit(lambda payload:self.receive_stellarium_selection(*payload),result)
         self.run_thread(worker,'StellariumPoll')
 
+    @staticmethod
+    def stellarium_same_source(a,b):
+        """Compare stable J2000 coordinates, ignoring harmless poll rounding."""
+        return (a is not None and b is not None
+                and a.name.strip().casefold()==b.name.strip().casefold()
+                and abs(((a.ra_hours-b.ra_hours+12)%24)-12)<1e-5
+                and abs(a.dec_degrees-b.dec_degrees)<1.5e-4)
+
     def receive_stellarium_selection(self,source,error):
         self.stellarium_poll_busy=False
         if source is None:
@@ -1129,15 +1138,17 @@ class WT8App(QWidget):
                 self.stellarium_readout.setToolTip('No valid Stellarium selection received')
             self.stellarium_button_style()
             return
-        key=(source.name,source.ra_hours,source.dec_degrees)
-        if key != self.stellarium_last_key:
-            self.stellarium_last_key=key
-            self.stellarium_pending=source
-            self.stellarium_accepted=False
-        if self.stellarium_accepted:
-            self.stellarium_readout.setText(f'Accepted: {source.name}')
+        # A repeated poll of the accepted selection is not a new notification.
+        if self.stellarium_same_source(source,self.stellarium_accepted_key):
+            self.stellarium_pending=self.stellarium_accepted_key
+            self.stellarium_accepted=True
+            self.stellarium_readout.setText(f'Accepted: {self.stellarium_pending.name}')
         else:
-            self.stellarium_readout.setText(f'{source.name}\\nRA {source.ra_hours:.5f}h  Dec {source.dec_degrees:+.5f}°')
+            if not self.stellarium_same_source(source,self.stellarium_pending):
+                self.stellarium_pending=source
+                self.stellarium_accepted=False
+            self.stellarium_readout.setText(
+                f'{source.name}\\nRA: {source.ra_hours:.5f} h\\nDec: {source.dec_degrees:+.5f}°')
         self.stellarium_readout.setToolTip(
             f'{source.name}\\nJ2000 RA: {source.ra_hours:.8f} h\\nJ2000 Dec: {source.dec_degrees:+.8f}°')
         self.stellarium_button_style()
@@ -1154,6 +1165,7 @@ class WT8App(QWidget):
         self.stellarium_pending=source
         self.stellarium_last_key=(source.name,source.ra_hours,source.dec_degrees)
         self.stellarium_accepted=True
+        self.stellarium_accepted_key=source
         self.stellarium_readout.setText(f'Accepted: {source.name}')
         self.stellarium_button_style()
         self.set_status(f'Stellarium source selected: {source.name}. Tracking not started.')
