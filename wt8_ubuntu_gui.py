@@ -74,9 +74,23 @@ class AzimuthCompass(QWidget):
         super().__init__(parent)
         self.actual=None
         self.target=None
+        self.zenith_rise_az=None
         self.setMinimumSize(170, 170)
         self.setMaximumWidth(195)
-        self.setToolTip('Cyan: measured antenna azimuth; yellow: commanded target azimuth')
+        self.setToolTip('Cyan: measured antenna azimuth; yellow: commanded target azimuth; magenta: zenith-track rising bearing')
+
+    def set_observer_latitude(self,latitude):
+        # For a level horizon, a source culminating at zenith has Dec=latitude.
+        # Horizon equation: cos(A_rise)=sin(latitude)/cos(latitude).
+        try:
+            phi=math.radians(float(latitude))
+            value=math.tan(phi)
+            self.zenith_rise_az=math.degrees(math.acos(value)) if math.isfinite(value) and -1<=value<=1 else None
+        except (ValueError,TypeError,OverflowError):
+            self.zenith_rise_az=None
+        if self.zenith_rise_az is not None:
+            self.setToolTip(f'Cyan: measured AZ; yellow: target AZ; magenta: zenith-rise bearing {self.zenith_rise_az:.2f}° (level horizon)')
+        self.update()
 
     def set_actual(self, degrees):
         self.actual=degrees if degrees is not None and math.isfinite(degrees) else None
@@ -121,6 +135,17 @@ class AzimuthCompass(QWidget):
             p.drawLine(QPointF(0,0),tip)
             p.setPen(Qt.NoPen); p.setBrush(QColor(color))
             p.drawEllipse(tip,3.5,3.5)
+        if self.zenith_rise_az is not None:
+            theta=math.radians(self.zenith_rise_az)
+            p.setPen(QPen(QColor('#bd31aa'),3,Qt.SolidLine,Qt.RoundCap))
+            p.drawLine(QPointF(48*math.sin(theta),-48*math.cos(theta)),
+                       QPointF(63*math.sin(theta),-63*math.cos(theta)))
+            p.setPen(QColor('#bd31aa'))
+            font=p.font(); font.setPointSize(7); font.setBold(True); p.setFont(font)
+            label=f'{self.zenith_rise_az:.1f}°'
+            # Place the numeric bearing inside the dial, away from 30° perimeter labels.
+            x=37*math.sin(theta); y=-37*math.cos(theta)
+            p.drawText(QPointF(x-p.fontMetrics().horizontalAdvance(label)/2,y+4),label)
         hand(self.target,'#e4b500',49,4)
         hand(self.actual,'#00b9c9',43,4)
         p.setPen(Qt.NoPen)
@@ -472,7 +497,7 @@ class ObserverDialog(SimpleDialog):
     def accept(self):
         try:
             self.app.site.latitude=self.to_float(self.lat,'Latitude'); self.app.site.longitude=self.to_float(self.lon,'Longitude'); self.app.site.timeout_enabled=self.timeout_enabled.isChecked(); self.app.site.timeout_minutes=self.to_float(self.timeout_min,'Timeout min'); self.app.site.log_retention_days=max(1,self.to_int(self.retention,'Log retention'))
-            save_site_config(self.app.config_path,self.app.site); self.app.set_status('Observer saved.'); self.app.update_reference(); super().accept()
+            save_site_config(self.app.config_path,self.app.site); self.app.refresh_zenith_rise_markers(); self.app.set_status('Observer saved.'); self.app.update_reference(); super().accept()
         except Exception as exc: self.fail(exc)
 
 class TrackingDialog(SimpleDialog):
@@ -1027,7 +1052,7 @@ class WT8App(QWidget):
         main.addWidget(header_panel)
         self.status=lbl('')
         for name in self.configs:
-            card=AntennaCard(name); card.set_controller_config(self.configs[name]); card.jog_pressed.connect(self.start_jog); card.jog_released.connect(self.release_jog); card.jog_mode_changed.connect(self.change_manual_mode); card.stop_clicked.connect(self.stop_antenna); card.state_changed.connect(self.announce_antenna_state); self.cards[name]=card; main.addWidget(card)
+            card=AntennaCard(name); card.compass.set_observer_latitude(self.site.latitude); card.set_controller_config(self.configs[name]); card.jog_pressed.connect(self.start_jog); card.jog_released.connect(self.release_jog); card.jog_mode_changed.connect(self.change_manual_mode); card.stop_clicked.connect(self.stop_antenna); card.state_changed.connect(self.announce_antenna_state); self.cards[name]=card; main.addWidget(card)
         self.power=B210Panel(self.power_config); self.power.app=self; self.power.load_active_calibrations(self.config_path,self.power_config); self.power.start_clicked.connect(self.start_b210); self.power.stop_clicked.connect(self.stop_b210); self.power.cal_clicked.connect(self.open_b210_calibration); self.power.log_start_clicked.connect(self.start_b210_log); self.power.log_stop_clicked.connect(self.stop_b210_log)
         self.power_toggle=btn('▸ B210 SDR POWER / CALIBRATION — Show panel'); self.power_toggle.setObjectName('sectionToggle')
         self.power_toggle.clicked.connect(self.toggle_power_panel); main.addWidget(self.power_toggle)
@@ -1374,6 +1399,10 @@ class WT8App(QWidget):
     def open_log_hint(self): self.info('Event logs are in the logs directory beside the app.')
     def open_limits(self): LimitsDialog(self).exec_()
     def open_observer(self): ObserverDialog(self).exec_()
+    def refresh_zenith_rise_markers(self):
+        for card in self.cards.values():
+            card.compass.set_observer_latitude(self.site.latitude)
+
     def open_tracking_dialog(self): TrackingDialog(self).exec_()
     def open_sources_dialog(self): SourcesDialog(self).exec_()
     def open_calibration_dialog(self): CalibrationDialog(self).exec_()
