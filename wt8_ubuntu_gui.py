@@ -947,6 +947,13 @@ class WT8App(QWidget):
         self.stellarium_readout.setMaximumWidth(260)
         self.stellarium_readout.setWordWrap(True)
         self.stellarium_readout.setToolTip('No Stellarium selection received')
+        self.stellarium_comp_checkbox=QCheckBox('AZ Comp')
+        self.stellarium_comp_checkbox.setObjectName('stellariumCompCheckbox')
+        self.stellarium_comp_checkbox.setChecked(True)
+        self.stellarium_comp_checkbox.setToolTip(
+            'When checked, subtract active azimuth drive compensation from measured AZ '
+            'before sending Stellarium Live feedback. No effect on antenna control.')
+        self.stellarium_comp_checkbox.toggled.connect(self.refresh_stellarium_feedback_positions)
         tools_actions=[
             ('Calibration','toolAction',self.open_calibration_dialog,'SP_DialogApplyButton'),
             ('Peak Cal','toolAction',self.open_peak_calibration,'SP_ArrowUp'),
@@ -964,6 +971,7 @@ class WT8App(QWidget):
                 layout.addWidget(button)
                 if label == 'Stellarium':
                     layout.addWidget(self.stellarium_readout)
+                    layout.addWidget(self.stellarium_comp_checkbox)
             layout.addStretch(1); main.addLayout(layout)
         top2=QHBoxLayout(); top2.setSpacing(6)
         motion_actions=[
@@ -1175,6 +1183,7 @@ class WT8App(QWidget):
             self.stellarium_feedback=feedback
             self.action_buttons['Stellarium Live'].setText('Stop Stellarium Live')
             self.style_stellarium_live_button()
+            self.refresh_stellarium_feedback_positions()
             self.set_status('Stellarium read-only feedback enabled: East TCP 10001, West TCP 10002.')
         except Exception as exc:
             self.set_status(f'Stellarium feedback unavailable: {exc}. Install python3-astropy if missing.')
@@ -1961,12 +1970,33 @@ class WT8App(QWidget):
                 try: self.emit(lambda data:self.update_position(*data),(n,s.read_position()))
                 except Exception as e: self.emit(lambda data:self.mark_fault(*data),(n,str(e)))
         self.run_thread(worker,'Poll')
+    def stellarium_feedback_azimuth(self,name,pos):
+        """Sky-pointing AZ = encoder AZ - active drive compensation."""
+        az=pos.azimuth
+        if not self.stellarium_comp_checkbox.isChecked():
+            return az
+        if not self.tracking_kind or self.current_target is None:
+            return az
+        _target,comp=self.antenna_display_target(name,self.current_target)
+        if comp is not None and comp > 0:
+            return (az-comp)%360.0
+        return az
+
+    def refresh_stellarium_feedback_positions(self,*_args):
+        if self.stellarium_feedback is None:
+            return
+        for name,pos in list(self.positions.items()):
+            antenna='East' if name.lower()=='east' else ('West' if name.lower()=='west' else None)
+            if antenna is not None:
+                self.stellarium_feedback.update(
+                    antenna,self.stellarium_feedback_azimuth(name,pos),pos.elevation)
+
     def update_position(self,name,pos):
         self.update_position_rates(name,pos); self.positions[name]=pos
         if self.stellarium_feedback is not None:
             antenna='East' if name.lower()=='east' else ('West' if name.lower()=='west' else None)
             if antenna is not None:
-                self.stellarium_feedback.update(antenna,pos.azimuth,pos.elevation)
+                self.stellarium_feedback.update(antenna,self.stellarium_feedback_azimuth(name,pos),pos.elevation)
         c=self.cards[name]; c.set_position(pos); card_target,az_comp=self.antenna_display_target(name,self.current_target); c.set_target(card_target,pos,az_comp); cfg=self.configs[name]; c.set_limits_ok(cfg.limits.is_az_allowed(pos.azimuth) and cfg.limits.is_el_allowed(pos.elevation))
     def antenna_rate_active(self,name):
         card=self.cards.get(name)
