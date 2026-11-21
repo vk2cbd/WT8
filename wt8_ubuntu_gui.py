@@ -128,16 +128,16 @@ class AzimuthCompass(QWidget):
         p.setBrush(Qt.NoBrush)
         p.setPen(QPen(QColor('#243956'),1.6))
         p.drawEllipse(QPointF(0,0),62,62)
-        # Red outer ring marks azimuths outside the effective drive envelope,
+        # Thin red inner arc marks azimuths outside the effective drive envelope,
         # including configured end-stop margins. Each dial uses its own limits.
         if self.az_limits is not None:
-            p.setPen(QPen(QColor('#d72d36'),5,Qt.SolidLine,Qt.RoundCap))
+            p.setPen(QPen(QColor('#d72d36'),2.5,Qt.SolidLine,Qt.RoundCap))
             for a in range(360):
                 if not self.az_accessible((a+0.5)%360):
                     t1=math.radians(a)
                     t2=math.radians(a+1)
-                    p.drawLine(QPointF(65*math.sin(t1),-65*math.cos(t1)),
-                               QPointF(65*math.sin(t2),-65*math.cos(t2)))
+                    p.drawLine(QPointF(59*math.sin(t1),-59*math.cos(t1)),
+                               QPointF(59*math.sin(t2),-59*math.cos(t2)))
         p.setPen(QPen(QColor('#243956'),1.6))
         for a in range(0,360,30):
             theta=math.radians(a)
