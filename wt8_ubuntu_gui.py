@@ -75,6 +75,7 @@ class AzimuthCompass(QWidget):
         self.actual=None
         self.target=None
         self.zenith_rise_az=None
+        self.az_limits=None
         self.setMinimumSize(170, 170)
         self.setMaximumWidth(195)
         self.setToolTip('Cyan: measured antenna azimuth; yellow: commanded target azimuth; magenta: zenith-track rising bearing')
@@ -91,6 +92,24 @@ class AzimuthCompass(QWidget):
         if self.zenith_rise_az is not None:
             self.setToolTip(f'Cyan: measured AZ; yellow: target AZ; magenta: zenith-rise bearing {self.zenith_rise_az:.2f}° (level horizon)')
         self.update()
+
+    def set_az_limits(self,limits):
+        self.az_limits=limits
+        self.update()
+
+    def az_accessible(self,bearing):
+        limits=self.az_limits
+        if limits is None:
+            return True
+        if limits._az_full_circle():
+            return True
+        # Use the same clockwise permitted arc as SafetyLimits, but exclude
+        # the approach margins at both ends for a conservative visual guide.
+        start=float(limits.az_min)%360.0
+        span=(float(limits.az_max)-float(limits.az_min))%360.0
+        margin=max(0.0,float(limits.az_margin))
+        offset=(bearing-start)%360.0
+        return margin <= offset <= span-margin if span>2*margin else False
 
     def set_actual(self, degrees):
         self.actual=degrees if degrees is not None and math.isfinite(degrees) else None
@@ -109,6 +128,17 @@ class AzimuthCompass(QWidget):
         p.setBrush(Qt.NoBrush)
         p.setPen(QPen(QColor('#243956'),1.6))
         p.drawEllipse(QPointF(0,0),62,62)
+        # Red outer ring marks azimuths outside the effective drive envelope,
+        # including configured end-stop margins. Each dial uses its own limits.
+        if self.az_limits is not None:
+            p.setPen(QPen(QColor('#d72d36'),5,Qt.SolidLine,Qt.RoundCap))
+            for a in range(360):
+                if not self.az_accessible((a+0.5)%360):
+                    t1=math.radians(a)
+                    t2=math.radians(a+1)
+                    p.drawLine(QPointF(65*math.sin(t1),-65*math.cos(t1)),
+                               QPointF(65*math.sin(t2),-65*math.cos(t2)))
+        p.setPen(QPen(QColor('#243956'),1.6))
         for a in range(0,360,30):
             theta=math.radians(a)
             r1=52 if a%90==0 else 56
@@ -232,6 +262,7 @@ class AntennaCard(Panel):
     def set_controller_config(self,config):
         self.com_port.setText(str(config.port))
         limits=config.limits
+        self.compass.set_az_limits(limits)
         self.az_limits.setText(f'{limits.az_min:.1f}° … {limits.az_max:.1f}°')
         self.el_limits.setText(f'{limits.el_min:.1f}° … {limits.el_max:.1f}°')
     def select_manual_mode(self,value):
@@ -485,7 +516,10 @@ class LimitsDialog(SimpleDialog):
         try:
             for name,f in self.fields.items():
                 cfg=self.app.configs[name]; cfg.limits.az_min=self.to_float(f['az_min'],'AZ min'); cfg.limits.az_max=self.to_float(f['az_max'],'AZ max'); cfg.limits.el_min=self.to_float(f['el_min'],'EL min'); cfg.limits.el_max=self.to_float(f['el_max'],'EL max'); cfg.limits.az_margin=self.to_float(f['az_margin'],'AZ margin'); cfg.limits.el_margin=self.to_float(f['el_margin'],'EL margin'); cfg.limits.max_jog_seconds=self.to_float(f['max_jog_seconds'],'Max jog'); cfg.limits.poll_interval=self.to_float(f['poll_interval'],'Poll sec'); cfg.park_az=self.to_float(f['park_az'],'Park AZ'); cfg.park_el=self.to_float(f['park_el'],'Park EL'); cfg.service_az=self.to_float(f['service_az'],'Service AZ'); cfg.service_el=self.to_float(f['service_el'],'Service EL'); cfg.limits.assert_position_allowed(cfg.park_az,cfg.park_el); validate_service_target(cfg.limits,cfg.service_az,cfg.service_el,self.app.site.az_stop_tolerance_degrees,self.app.site.el_stop_tolerance_degrees)
-            save_configs(self.app.config_path,self.app.configs); self.app.set_status('Limits saved.'); super().accept()
+            save_configs(self.app.config_path,self.app.configs)
+            for name,card in self.app.cards.items():
+                card.set_controller_config(self.app.configs[name])
+            self.app.set_status('Limits saved.'); super().accept()
         except Exception as exc: self.fail(exc)
 
 class ObserverDialog(SimpleDialog):
