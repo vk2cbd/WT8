@@ -4,6 +4,8 @@
 from __future__ import annotations
 import argparse, csv, html, json, math, queue, re, subprocess, threading, time
 from urllib.request import urlopen
+from urllib.parse import urlsplit
+import ipaddress
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -571,7 +573,7 @@ class StellariumDialog(SimpleDialog):
         self.main.addWidget(lbl('Select a fixed celestial object in Stellarium, then click Read Selection.'))
         row=QHBoxLayout()
         row.addWidget(lbl('API URL'))
-        self.url=QLineEdit('http://127.0.0.1:8090/api/objects/info?format=json')
+        self.url=QLineEdit(app.stellarium_api_url())
         row.addWidget(self.url)
         self.main.addLayout(row)
         self.preview=QPlainTextEdit()
@@ -646,8 +648,8 @@ class StellariumDialog(SimpleDialog):
         self.pending=None
         self.accept_button.setEnabled(False)
         url=self.url.text().strip()
-        if url != 'http://127.0.0.1:8090/api/objects/info?format=json':
-            self.preview.setPlainText('Only the local Stellarium endpoint is enabled in Stage 1.')
+        if url != self.app.stellarium_api_url():
+            self.preview.setPlainText('Use the configured Stellarium endpoint from Network Config.')
             return
         self.preview.setPlainText('Reading Stellarium...')
         # Run HTTP I/O outside Qt's GUI thread.
@@ -665,7 +667,7 @@ class StellariumDialog(SimpleDialog):
                                        and any(isinstance(v,str) and v.strip() for v in data['designations']))
                 if not has_name:
                     try:
-                        with urlopen('http://127.0.0.1:8090/api/objects/info',timeout=3) as response:
+                        with urlopen(self.app.stellarium_api_url().split('?')[0],timeout=3) as response:
                             info_html=response.read(65537)
                         if len(info_html)<=65536:
                             match=re.search(r'<h2\b[^>]*>(.*?)</h2>',info_html.decode('utf-8'),re.I|re.S)
@@ -925,6 +927,10 @@ class WT8App(QWidget):
         super().__init__(); self.config_path=Path(config_path); self.configs=load_configs(self.config_path); self.site=load_site_config(self.config_path); self.power_config=load_power_config(self.config_path); self.sources=load_sources(self.config_path); self.selected_source_name=self.site.selected_source if self.site.selected_source in self.sources else next(iter(self.sources), '')
         self.event_log=EventLogger(Path('logs'),self.site.log_retention_days,self.site.log_level); self.state_store=AppStateStore(); self.sessions={}; self.positions={}; self.position_rate_state={}; self.cards={}; self.current_target=None; self.card_targets={}; self.tracking_kind=''; self.tracking_stop=threading.Event(); self.tracking_thread=None; self.service_stop=threading.Event(); self.service_active=False; self.park_stop=threading.Event(); self.park_active=False; self.fixed_target_mode=''; self.fixed_target_generation=0; self.tracking_starting=False; self.jog_stops={}; self.manual_axes={}; self.manual_pending={}; self.manual_modes={}; self.b210_stop=threading.Event(); self.b210_thread=None; self.events=queue.Queue(); self.event_history=[]; self.log_handle=None; self.log_writer=None; self.scan_stop=threading.Event(); self.scan_thread=None; self.scan_antenna_name=''; self.scan_axis=None; self.scan_offset_degrees=0.0; self.scan_offset_lock=threading.Lock(); self.scan_result_dialogs=[]; self.yfactor_stop=threading.Event(); self.yfactor_thread=None; self.yfactor_active=False; self.yfactor_hot_label=''; self.peak_stop=threading.Event(); self.peak_thread=None; self.tracking_nominal_az={}; self.tracking_az_comp_force={}; self.modeless_dialogs=[]; self.active_scan_antenna=''; self.active_scan_dialog=None; self.scan_resume_kind=''; self.last_user_activity=time.monotonic(); self.timeout_in_progress=False
         self.stellarium_feedback=None
+        self.network_settings=QSettings('WT8', 'AntennaController')
+        self.stellarium_host=self.network_settings.value('network/stellarium_host','127.0.0.1',type=str)
+        self.stellarium_port=self.network_settings.value('network/stellarium_port',8090,type=int)
+        self.feedback_bind=self.network_settings.value('network/feedback_bind','127.0.0.1',type=str)
         self.voice=VoiceAnnunciator()
         self.voice_settings=QSettings('WT8', 'AntennaController')
         self.saved_voice_muted=self.voice_settings.value('voice/muted', True, type=bool)
@@ -975,6 +981,7 @@ class WT8App(QWidget):
             ('Sources','toolAction',self.open_sources_dialog,'SP_DirIcon'),
             ('Stellarium','toolAction',self.open_stellarium_dialog,'SP_ComputerIcon'),
             ('Stellarium Live','toolAction',self.toggle_stellarium_feedback,'SP_ComputerIcon'),
+            ('Network Config','toolAction',self.open_network_config,'SP_DriveNetIcon'),
         ]
         tools_actions=[
             ('Calibration','toolAction',self.open_calibration_dialog,'SP_DialogApplyButton'),
@@ -1080,13 +1087,54 @@ class WT8App(QWidget):
             return
         try:
             import astropy.coordinates  # Required for accurate ICRS/J2000 conversion.
-            feedback=StellariumFeedback(self.site.latitude,self.site.longitude)
+            feedback=StellariumFeedback(self.site.latitude,self.site.longitude,bind_host=self.feedback_bind)
             feedback.start()
             self.stellarium_feedback=feedback
             self.action_buttons['Stellarium Live'].setText('Stop Stellarium Live')
-            self.set_status('Stellarium read-only feedback enabled: East TCP 10001, West TCP 10002.')
+            self.set_status(f'Stellarium read-only feedback listening on {self.feedback_bind}: East TCP 10001, West TCP 10002.')
         except Exception as exc:
             self.set_status(f'Stellarium feedback unavailable: {exc}. Install python3-astropy if missing.')
+
+    def stellarium_api_url(self):
+        return f'http://{self.stellarium_host}:{self.stellarium_port}/api/objects/info?format=json'
+
+    def open_network_config(self):
+        dialog=QDialog(self)
+        dialog.setWindowTitle('Stellarium Network Configuration')
+        layout=QVBoxLayout(dialog)
+        layout.addWidget(lbl('Stellarium Remote Control server (Windows PC or localhost)'))
+        host=QLineEdit(self.stellarium_host)
+        layout.addWidget(lbl('Stellarium IPv4 address')); layout.addWidget(host)
+        port=QLineEdit(str(self.stellarium_port))
+        layout.addWidget(lbl('HTTP port (default 8090)')); layout.addWidget(port)
+        layout.addWidget(lbl('WT8 feedback listening address (Ubuntu IP; 127.0.0.1 for local only)'))
+        bind=QLineEdit(self.feedback_bind)
+        layout.addWidget(bind)
+        layout.addWidget(lbl('Feedback ports: East 10001, West 10002 (read-only).'))
+        layout.addWidget(lbl('Changes to the feedback listener take effect when Stellarium Live is restarted.'))
+        buttons=QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        layout.addWidget(buttons)
+        def save():
+            try:
+                h=host.text().strip(); b=bind.text().strip()
+                ipaddress.IPv4Address(h)
+                ipaddress.IPv4Address(b)
+                p=int(port.text().strip())
+                if not 1 <= p <= 65535:
+                    raise ValueError('HTTP port must be between 1 and 65535')
+            except ValueError as exc:
+                QMessageBox.warning(dialog,'Invalid network configuration',str(exc))
+                return
+            self.stellarium_host=h; self.stellarium_port=p; self.feedback_bind=b
+            self.network_settings.setValue('network/stellarium_host',h)
+            self.network_settings.setValue('network/stellarium_port',p)
+            self.network_settings.setValue('network/feedback_bind',b)
+            self.network_settings.sync()
+            self.set_status('Network settings saved. Restart Stellarium Live to apply listener changes.')
+            dialog.accept()
+        buttons.accepted.connect(save)
+        buttons.rejected.connect(dialog.reject)
+        dialog.exec_()
 
     def open_stellarium_dialog(self):
         dialog=StellariumDialog(self)
