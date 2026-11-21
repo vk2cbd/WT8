@@ -1,6 +1,6 @@
 """Read-only Stellarium Telescope Control feedback for WT8.
 
-Two localhost TCP listeners: East 10001, West 10002. Incoming telescope
+Two configurable TCP listeners: East 10001, West 10002. Incoming telescope
 commands are never interpreted or forwarded to the antenna controllers.
 Requires astropy for an accurate AltAz -> ICRS/J2000 transformation.
 """
@@ -39,9 +39,10 @@ def horizontal_to_icrs(azimuth, elevation, latitude, longitude, when):
 
 class StellariumFeedback:
     """Publishes measured antenna positions only, never accepts commands."""
-    def __init__(self, latitude, longitude):
+    def __init__(self, latitude, longitude, bind_host='127.0.0.1'):
         self.latitude = float(latitude)
         self.longitude = float(longitude)
+        self.bind_host = bind_host
         self.stop_event = threading.Event()
         self.lock = threading.Lock()
         self.positions = {}
@@ -54,7 +55,7 @@ class StellariumFeedback:
             for name, port in PORTS.items():
                 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-                sock.bind(("127.0.0.1", port))
+                sock.bind((self.bind_host, port))
                 sock.listen(2)
                 sock.settimeout(0.5)
                 self.listeners.append(sock)
